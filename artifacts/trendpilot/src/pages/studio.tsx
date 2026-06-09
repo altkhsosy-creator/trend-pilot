@@ -16,6 +16,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Zap,
+  ExternalLink,
+  Download,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -128,17 +130,34 @@ function ContentView({
   videoRef: React.RefObject<HTMLVideoElement>;
 }) {
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const videoSrc = `${BASE}/api/content/video`;
-  const audioSrc = `${BASE}/api/content/audio`;
+  const ts = data.generated_at ? encodeURIComponent(data.generated_at) : Date.now();
+  const videoSrc = `${BASE}/api/content/video?t=${ts}`;
+  const audioSrc = `${BASE}/api/content/audio?t=${ts}`;
 
   return (
     <div className="space-y-6">
       <Card className="border-border/50 bg-card/50 backdrop-blur overflow-hidden">
-        <CardHeader className="border-b border-border/50 bg-muted/20 flex flex-row items-center gap-2">
-          <Video className="h-5 w-5 text-primary" />
-          <div>
-            <CardTitle>Video Preview</CardTitle>
-            <CardDescription className="mt-0.5 line-clamp-1">{data.title}</CardDescription>
+        <CardHeader className="border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Video className="h-5 w-5 text-primary" />
+            <div>
+              <CardTitle>Video Preview</CardTitle>
+              <CardDescription className="mt-0.5 line-clamp-1">{data.title}</CardDescription>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
+              <a href={videoSrc} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-3.5 w-3.5" />
+                Watch in new tab
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
+              <a href={videoSrc} download="trendpilot-video.mp4">
+                <Download className="h-3.5 w-3.5" />
+                Download
+              </a>
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="p-0 bg-black">
@@ -147,7 +166,7 @@ function ContentView({
             src={videoSrc}
             controls
             className="w-full max-h-[480px] object-contain"
-            preload="metadata"
+            preload="auto"
           />
         </CardContent>
       </Card>

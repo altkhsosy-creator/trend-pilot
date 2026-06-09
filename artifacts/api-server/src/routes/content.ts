@@ -56,6 +56,7 @@ router.get("/content/video", (req, res) => {
     res.writeHead(200, {
       "Content-Length": fileSize,
       "Content-Type": "video/mp4",
+      "Accept-Ranges": "bytes",
     });
     fs.createReadStream(VIDEO_FILE).pipe(res);
   }
@@ -89,6 +90,7 @@ router.get("/content/audio", (req, res) => {
     res.writeHead(200, {
       "Content-Length": fileSize,
       "Content-Type": "audio/mpeg",
+      "Accept-Ranges": "bytes",
     });
     fs.createReadStream(AUDIO_FILE).pipe(res);
   }
