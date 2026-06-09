@@ -1,5 +1,5 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from trends import get_trends, select_top_trend
+from viral_engine import get_viral_story
 from script import generate_full_content
 from voice import text_to_speech
 from video import create_video
@@ -12,9 +12,8 @@ _latest_package: dict = {}
 def job():
     global _latest_package
 
-    trends = get_trends()
-    top = select_top_trend(trends)
-    topic = top["title"]
+    story = get_viral_story()
+    topic = story["title"]
 
     content = generate_full_content(topic)
     title = content.get("title", topic)
