@@ -3,6 +3,9 @@ import subprocess
 import tempfile
 import requests
 
+from scene_router import split_into_scenes
+from ai_video import generate_ai_scene
+
 import PIL.Image
 if not hasattr(PIL.Image, "ANTIALIAS"):
     PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
@@ -159,4 +162,34 @@ def create_video(audio_path, script, output="video.mp4"):
         shutil.move(tmp_out if os.path.exists(tmp_out) else output, output)
 
     print(f"[video] Done → {output}")
+    return output
+
+
+def create_hybrid_video(audio_path, script, output="video.mp4"):
+
+    audio = AudioFileClip(audio_path)
+    scenes = split_into_scenes(script)
+
+    final_clips = []
+    ai_index = 0
+
+    for i, scene in enumerate(scenes):
+
+        if scene["type"] == "ai":
+            # AI scene (placeholder or future API)
+            clip_path = generate_ai_scene(scene["text"], ai_index)
+            ai_index += 1
+
+            clip = ColorClip(size=(1280, 720), color=(255, 0, 0), duration=3)
+            clip = clip.set_duration(3)
+
+        else:
+            # Pexels fallback
+            clip = ColorClip(size=(1280, 720), color=(0, 0, 0), duration=4)
+
+        final_clips.append(clip)
+
+    video = concatenate_videoclips(final_clips).set_audio(audio)
+    video.write_videofile(output, fps=24)
+
     return output
