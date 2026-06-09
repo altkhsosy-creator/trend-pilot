@@ -8,6 +8,7 @@ import { Dashboard } from "@/pages/dashboard";
 import { Trends } from "@/pages/trends";
 import { TrendDetail } from "@/pages/trends/detail";
 import { Watchlist } from "@/pages/watchlist";
+import { Studio } from "@/pages/studio";
 import { Layout } from "@/components/layout";
 
 const queryClient = new QueryClient();
@@ -20,6 +21,7 @@ function Router() {
         <Route path="/trends" component={Trends} />
         <Route path="/trends/:id" component={TrendDetail} />
         <Route path="/watchlist" component={Watchlist} />
+        <Route path="/studio" component={Studio} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

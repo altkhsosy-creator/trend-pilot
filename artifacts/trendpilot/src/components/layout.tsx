@@ -9,7 +9,8 @@ import {
   Moon, 
   Sun, 
   Zap, 
-  Signal
+  Signal,
+  Clapperboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
@@ -27,6 +28,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { name: "Dashboard", href: "/", icon: Activity },
     { name: "Trends", href: "/trends", icon: BarChart2 },
     { name: "Watchlist", href: "/watchlist", icon: Eye },
+    { name: "Studio", href: "/studio", icon: Clapperboard },
   ];
 
   const NavLinks = () => (
