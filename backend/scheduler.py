@@ -23,7 +23,7 @@ def job():
     tags = content.get("tags", [])
 
     audio = text_to_speech(script)
-    video = create_video(audio)
+    video = create_video(audio, script)
 
     package = build_content_package(
         topic=topic,

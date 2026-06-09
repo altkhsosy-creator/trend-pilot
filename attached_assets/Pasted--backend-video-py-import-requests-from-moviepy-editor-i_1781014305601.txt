@@ -1,3 +1,7 @@
+ملف جديد: backend/video.py (احترافي)
+
+انسخ هذا بالكامل:
+
 import requests
 from moviepy.editor import *
 from PIL import Image
