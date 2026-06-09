@@ -1,5 +1,9 @@
 import json
+from openai import OpenAI
 from config import OPENAI_API_KEY, MOCK_MODE
+from viral_engine import get_viral_story
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 
 # --------------------------------------------------
@@ -78,35 +82,89 @@ def _mock_content(topic: str) -> dict:
 
 
 # --------------------------------------------------
-# REAL — uses OpenAI when MOCK_MODE=false
+# generate_script — standalone, fetches own story
 # --------------------------------------------------
 
-_SYSTEM_PROMPT = """You are an elite YouTube scriptwriter specialising in viral, high-retention documentary-style content.
+def generate_script() -> str:
+    if MOCK_MODE:
+        print("[MOCK_MODE] Skipping OpenAI — returning mock script")
+        return _MOCK_SCRIPT
 
-Your scripts follow real events, documented cases, Reddit mysteries, true crime, and verifiable social phenomena — NOT pure fiction or made-up science.
+    story = get_viral_story()
 
-Core rules:
-1. Open with a single concrete, shocking sentence that happened in real life — name, date, place if possible.
-2. Every 30–60 seconds of script (roughly every 150–200 words) insert a hard retention hook: a shocking fact, a twist, an unanswered question, or a direct challenge to the viewer ("Here's what nobody talks about...", "Stop. Before you keep watching, consider this...").
-3. Use curiosity gaps constantly — hint at information, then delay the reveal.
-4. Include at least two verifiable, specific factual claims (real statistics, documented cases, named people or places).
-5. End with an unresolved question, open mystery, or disturbing implication — never a tidy conclusion.
-6. Language: conversational, present-tense where possible, short punchy sentences mixed with longer ones.
-7. No fictional scientists, no made-up labs, no "scientists discovered" vague claims — ground everything in reality."""
+    prompt = f"""
+You are a professional YouTube viral documentary script writer.
+
+Use this REAL viral Reddit story as source:
+
+Title: {story['title']}
+Score: {story['score']}
+
+RULES:
+- Do NOT write fictional science stories
+- Base everything on real internet discussion
+- Make it engaging like a Netflix documentary
+- Length: 1500–1800 words
+- Add a strong hook in first 5 seconds
+- Add mini hooks every 30–60 seconds
+- Increase curiosity gradually
+- End with an unresolved or shocking question
+
+Structure:
+1. Hook
+2. Context
+3. Escalation
+4. Community reaction
+5. Hidden truth / insight
+6. Ending twist
+
+Make it feel like a real unexplained internet phenomenon.
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    return response.choices[0].message.content
+
+
+# --------------------------------------------------
+# _real_content — full package for the pipeline
+# --------------------------------------------------
+
+_SYSTEM_PROMPT = """You are a professional YouTube viral documentary script writer.
+
+RULES:
+- Do NOT write fictional science stories
+- Base everything on real internet discussion and documented events
+- Make it engaging like a Netflix documentary
+- Add a strong hook in first 5 seconds
+- Add mini hooks every 30–60 seconds
+- Increase curiosity gradually
+- End with an unresolved or shocking question
+
+Script structure:
+1. Hook
+2. Context
+3. Escalation
+4. Community reaction
+5. Hidden truth / insight
+6. Ending twist
+
+Make it feel like a real unexplained internet phenomenon."""
 
 
 def _real_content(topic: str) -> dict:
-    from openai import OpenAI
+    user_prompt = f"""Use this REAL viral Reddit story as source:
 
-    client = OpenAI(api_key=OPENAI_API_KEY)
-
-    user_prompt = f"""Trending topic / story seed: "{topic}"
+Title: {topic}
 
 Return a JSON object with EXACTLY these fields:
 {{
-  "title": "Viral YouTube title — max 100 chars. Use a real hook: name/date/place or shocking claim. High CTR.",
-  "script": "Full 7–9 minute YouTube script (~1200–1500 words). Opens with a real event or documented case. Retention hooks every ~150 words. Curiosity gaps. Shocking factual claims. Ends with an unresolved question or open mystery. NO fictional characters or invented science. Reddit/true-mystery/real-events tone.",
-  "description": "YouTube description 150–250 words. Hook in first 2 lines. Summary of story. SEO tags. CTA to subscribe and comment.",
+  "title": "Viral YouTube title — max 100 chars. Real hook: name/date/place or shocking claim. High CTR.",
+  "script": "Full 7–9 minute YouTube script (1500–1800 words). Follows the 6-part structure. Mini hooks every ~150 words. Ends with unresolved question or shocking twist.",
+  "description": "YouTube description 150–250 words. Hook in first 2 lines. Story summary. CTA to subscribe and comment. SEO hashtags.",
   "tags": ["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10"]
 }}
 
@@ -134,7 +192,3 @@ def generate_full_content(topic: str) -> dict:
         print(f"[MOCK_MODE] Skipping OpenAI — returning mock content for: {topic}")
         return _mock_content(topic)
     return _real_content(topic)
-
-
-def generate_script(topic: str) -> str:
-    return generate_full_content(topic).get("script", "")
