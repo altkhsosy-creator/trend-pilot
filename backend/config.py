@@ -7,3 +7,4 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
+MOCK_MODE = os.getenv("MOCK_MODE", "false").lower() == "true"
