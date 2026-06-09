@@ -1,10 +1,8 @@
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
 
 load_dotenv()
 
-class Settings:
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
-
-settings = Settings()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
