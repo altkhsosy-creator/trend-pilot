@@ -3,6 +3,7 @@ from openai import OpenAI
 from config import OPENAI_API_KEY, MOCK_MODE
 from viral_engine import get_viral_story
 from hook_ai import detect_story_type, generate_hook
+from retention_engine import insert_retention_hooks
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -89,7 +90,7 @@ def _mock_content(topic: str) -> dict:
 def generate_script() -> str:
     if MOCK_MODE:
         print("[MOCK_MODE] Skipping OpenAI — returning mock script")
-        return _MOCK_SCRIPT
+        return insert_retention_hooks(_MOCK_SCRIPT)
 
     story = get_viral_story()
     story_type = detect_story_type(story['title'])
@@ -132,7 +133,8 @@ Make it feel like a real unexplained internet phenomenon.
         messages=[{"role": "user", "content": prompt}]
     )
 
-    return response.choices[0].message.content
+    raw_script = response.choices[0].message.content
+    return insert_retention_hooks(raw_script)
 
 
 # --------------------------------------------------
