@@ -134,7 +134,8 @@ Make it feel like a real unexplained internet phenomenon.
     )
 
     raw_script = response.choices[0].message.content
-    return insert_retention_hooks(raw_script)
+    final_script = insert_retention_hooks(raw_script)
+    return final_script
 
 
 # --------------------------------------------------
