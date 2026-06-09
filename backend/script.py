@@ -99,7 +99,7 @@ def generate_script() -> str:
 You are a viral YouTube documentary script writer.
 
 IMPORTANT:
-Start the script with this EXACT hook:
+Start the script with EXACTLY this hook:
 
 "{hook}"
 
