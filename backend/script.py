@@ -2,7 +2,7 @@ import json
 from openai import OpenAI
 from config import OPENAI_API_KEY, MOCK_MODE
 from viral_engine import get_viral_story
-from hook_engine import detect_story_type, generate_hook
+from hook_ai import detect_story_type, generate_hook
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
