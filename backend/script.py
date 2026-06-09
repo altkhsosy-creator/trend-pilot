@@ -2,6 +2,7 @@ import json
 from openai import OpenAI
 from config import OPENAI_API_KEY, MOCK_MODE
 from viral_engine import get_viral_story
+from hook_engine import generate_hook
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -91,27 +92,31 @@ def generate_script() -> str:
         return _MOCK_SCRIPT
 
     story = get_viral_story()
+    hook = generate_hook(story['title'])
 
     prompt = f"""
-You are a professional YouTube viral documentary script writer.
+You are a viral YouTube documentary script writer.
 
-Use this REAL viral Reddit story as source:
+IMPORTANT:
+Start the script with this EXACT hook:
+
+"{hook}"
+
+Rules:
+- Hook must be first 5–10 seconds of video
+- Then immediately transition into story
+- Maintain high curiosity every 30–60 seconds
+- Keep viewer retention extremely high
+- Length: 1500–1800 words
+- Ending must be unresolved or shocking
+
+Use this REAL viral Reddit story as your source:
 
 Title: {story['title']}
 Score: {story['score']}
 
-RULES:
-- Do NOT write fictional science stories
-- Base everything on real internet discussion
-- Make it engaging like a Netflix documentary
-- Length: 1500–1800 words
-- Add a strong hook in first 5 seconds
-- Add mini hooks every 30–60 seconds
-- Increase curiosity gradually
-- End with an unresolved or shocking question
-
 Structure:
-1. Hook
+1. Hook (use the exact hook above)
 2. Context
 3. Escalation
 4. Community reaction
