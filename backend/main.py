@@ -1,8 +1,12 @@
 from fastapi import FastAPI
-from config import settings
+from scheduler import start_scheduler
 
-app = FastAPI(title="TrendPilot AI Backend")
+app = FastAPI()
 
 @app.get("/")
-def root():
-    return {"status": "ok"}
+def home():
+    return {"status": "TrendPilot AI running"}
+
+@app.on_event("startup")
+def start():
+    start_scheduler()
