@@ -1,22 +1,24 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: TrendPilot AI API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: trends
+    description: Trend operations
+  - name: watchlist
+    description: Watchlist operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +26,189 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /trends:
+    get:
+      operationId: listTrends
+      tags: [trends]
+      summary: List all trends
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of trends
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trend"
+    post:
+      operationId: createTrend
+      tags: [trends]
+      summary: Create a trend
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrendInput"
+      responses:
+        "201":
+          description: Created trend
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trend"
+
+  /trends/summary:
+    get:
+      operationId: getTrendsSummary
+      tags: [trends]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Summary stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrendSummary"
+
+  /trends/top:
+    get:
+      operationId: getTopTrends
+      tags: [trends]
+      summary: Get top trending items
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Top trends
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trend"
+
+  /trends/{id}:
+    get:
+      operationId: getTrend
+      tags: [trends]
+      summary: Get a trend by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trend
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trend"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateTrend
+      tags: [trends]
+      summary: Update a trend
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrendUpdate"
+      responses:
+        "200":
+          description: Updated trend
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trend"
+    delete:
+      operationId: deleteTrend
+      tags: [trends]
+      summary: Delete a trend
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /watchlist:
+    get:
+      operationId: listWatchlist
+      tags: [watchlist]
+      summary: List watchlist items
+      responses:
+        "200":
+          description: Watchlist items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WatchlistItem"
+    post:
+      operationId: addToWatchlist
+      tags: [watchlist]
+      summary: Add a trend to watchlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WatchlistItemInput"
+      responses:
+        "201":
+          description: Created watchlist item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchlistItem"
+
+  /watchlist/{id}:
+    delete:
+      operationId: removeFromWatchlist
+      tags: [watchlist]
+      summary: Remove item from watchlist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Removed
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +219,144 @@ components:
       required:
         - status
 
+    Trend:
+      type: object
+      required: [id, name, category, score, velocity, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+        score:
+          type: number
+          description: Trend popularity score 0-100
+        velocity:
+          type: number
+          description: Percentage change (positive = rising, negative = falling)
+        status:
+          type: string
+          description: "rising | peaking | declining | emerging"
+        description:
+          type: ["string", "null"]
+        source:
+          type: ["string", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    TrendInput:
+      type: object
+      required: [name, category, score, velocity, status]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        category:
+          type: string
+          minLength: 1
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+        velocity:
+          type: number
+        status:
+          type: string
+        description:
+          type: string
+        source:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    TrendUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        category:
+          type: string
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+        velocity:
+          type: number
+        status:
+          type: string
+        description:
+          type: string
+        source:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    TrendSummary:
+      type: object
+      required: [total, rising, peaking, declining, emerging, byCategory, avgScore]
+      properties:
+        total:
+          type: integer
+        rising:
+          type: integer
+        peaking:
+          type: integer
+        declining:
+          type: integer
+        emerging:
+          type: integer
+        byCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryCount"
+        avgScore:
+          type: number
+
+    CategoryCount:
+      type: object
+      required: [category, count]
+      properties:
+        category:
+          type: string
+        count:
+          type: integer
+
+    WatchlistItem:
+      type: object
+      required: [id, trendId, trend, createdAt]
+      properties:
+        id:
+          type: integer
+        trendId:
+          type: integer
+        notes:
+          type: ["string", "null"]
+        alertEnabled:
+          type: boolean
+        createdAt:
+          type: string
+        trend:
+          $ref: "#/components/schemas/Trend"
+
+    WatchlistItemInput:
+      type: object
+      required: [trendId]
+      properties:
+        trendId:
+          type: integer
+        notes:
+          type: string
+        alertEnabled:
+          type: boolean

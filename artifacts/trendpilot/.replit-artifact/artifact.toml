@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "TrendPilot AI"
+version = "1.0.0"
+id = "artifacts/trendpilot"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25156
+
+[services.development]
+run = "pnpm --filter @workspace/trendpilot run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/trendpilot", "run", "build" ]
+publicDir = "artifacts/trendpilot/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25156"
+BASE_PATH = "/"
