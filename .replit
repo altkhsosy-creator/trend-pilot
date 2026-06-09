@@ -42,7 +42,7 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
-packages = ["ffmpeg-full", "imagemagickBig"]
+packages = ["ffmpeg-full", "freetype", "imagemagickBig", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "tcl", "tk", "zlib"]
 
 [[ports]]
 localPort = 8000

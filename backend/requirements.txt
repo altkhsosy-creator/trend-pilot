@@ -5,4 +5,6 @@ openai
 python-dotenv
 apscheduler
 gtts
-moviepy
+moviepy==1.0.3
+pillow
+numpy
