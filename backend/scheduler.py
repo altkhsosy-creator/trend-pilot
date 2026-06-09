@@ -1,6 +1,6 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from viral_engine import get_viral_story
-from script import generate_full_content
+from script import generate_script, generate_full_content
 from voice import text_to_speech
 from video import create_video
 from package_builder import build_content_package
@@ -17,7 +17,7 @@ def job():
 
     content = generate_full_content(topic)
     title = content.get("title", topic)
-    script = content.get("script", "")
+    script = generate_script()
     description = content.get("description", "")
     tags = content.get("tags", [])
 
