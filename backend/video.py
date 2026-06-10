@@ -131,7 +131,7 @@ def make_gradient_card(text, duration, is_hook=False):
         except Exception:
             pass
 
-    return ImageClip(np.array(pil_img)).set_duration(duration)
+    return ImageClip(np.array(pil_img)).with_duration(duration)
 
 
 def extract_segments_with_hooks(script):
@@ -254,7 +254,7 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
     elif final.duration > total:
         final = final.subclip(0, total)
 
-    final = final.set_audio(audio)
+    final = final.with_audio(audio)
 
     # تصدير الفيديو
     tmp_out = output + ".tmp.mp4"
