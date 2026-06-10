@@ -11,10 +11,16 @@ import PIL.Image
 if not hasattr(PIL.Image, "ANTIALIAS"):
     PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
 
-from moviepy.editor import (
-    VideoFileClip, ColorClip, TextClip, CompositeVideoClip,
-    AudioFileClip, concatenate_videoclips, ImageClip,
-)
+try:
+    from moviepy.editor import (
+        VideoFileClip, ColorClip, TextClip, CompositeVideoClip,
+        AudioFileClip, concatenate_videoclips, ImageClip,
+    )
+except ImportError:
+    from moviepy import (
+        VideoFileClip, ColorClip, TextClip, CompositeVideoClip,
+        AudioFileClip, concatenate_videoclips, ImageClip,
+    )
 import numpy as np
 
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
