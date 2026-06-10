@@ -6,7 +6,10 @@ from hook_ai import detect_story_type, generate_hook
 from retention_engine import insert_retention_hooks
 from emotion_engine import optimize_for_narration
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+if not MOCK_MODE:
+    client = OpenAI(api_key=OPENAI_API_KEY)
+else:
+    client = None
 
 
 # --------------------------------------------------
