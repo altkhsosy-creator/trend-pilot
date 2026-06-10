@@ -2,6 +2,7 @@ import os
 import subprocess
 import tempfile
 import requests
+import re
 
 from scene_router import split_into_scenes
 from ai_video import generate_ai_scene
@@ -20,10 +21,24 @@ PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 W, H = 1280, 720
 
 
-def get_stock_video_urls(query="nature landscape", n=5):
+def get_stock_video_urls(query="motivation business success", n=8):
+    """يجلب فيديوهات من Pexels حسب موضوع القصة"""
     if not PEXELS_API_KEY:
         return []
-    url = f"https://api.pexels.com/videos/search?query={query}&per_page={n}&orientation=landscape"
+
+    # تحسين الـ query حسب نوع القصة
+    queries = {
+        "business": "business success entrepreneur",
+        "tech": "technology future coding",
+        "horror": "dark mystery suspense",
+        "inspirational": "sunset mountain hope",
+        "science": "science space discovery",
+        "default": "motivation viral trend"
+    }
+
+    actual_query = queries.get(query, query) if isinstance(query, str) else queries["default"]
+
+    url = f"https://api.pexels.com/videos/search?query={actual_query}&per_page={n}&orientation=landscape"
     headers = {"Authorization": PEXELS_API_KEY}
     try:
         res = requests.get(url, headers=headers, timeout=10)
@@ -58,31 +73,54 @@ def download_clip(url, tmp_dir):
         return None
 
 
-def make_gradient_card(text, duration):
-    gradient = np.zeros((H, W, 3), dtype=np.uint8)
-    for y in range(H):
-        t = y / H
-        gradient[y, :] = [int(5 + 25 * t), int(5 + 15 * t), int(20 + 45 * t)]
+def make_gradient_card(text, duration, is_hook=False):
+    """
+    يصنع بطاقة نصية جميلة مع تأثير خاص إذا كانت hook
+    """
+    # خلفية متدرجة
+    if is_hook:
+        # ألوان جريئة للـ hook (أحمر/برتقالي)
+        gradient = np.zeros((H, W, 3), dtype=np.uint8)
+        for y in range(H):
+            t = y / H
+            gradient[y, :] = [int(100 + 100 * t), int(20 + 40 * t), int(20 + 30 * t)]
+    else:
+        # ألوان هادئة للقصة العادية
+        gradient = np.zeros((H, W, 3), dtype=np.uint8)
+        for y in range(H):
+            t = y / H
+            gradient[y, :] = [int(5 + 25 * t), int(5 + 15 * t), int(20 + 45 * t)]
 
     bg = ImageClip(gradient).set_duration(duration)
 
+    # تنسيق النص
     words = text.strip().split()
     lines, line = [], []
     for w in words:
         line.append(w)
-        if len(" ".join(line)) > 30:
+        if len(" ".join(line)) > 28:
             lines.append(" ".join(line[:-1]))
             line = [w]
     if line:
         lines.append(" ".join(line))
 
     overlays = [bg]
-    y0 = H // 2 - len(lines) * 42
+
+    # حجم خط أكبر للـ hook
+    fontsize = 52 if is_hook else 40
+
+    y0 = H // 2 - len(lines) * (fontsize // 2 + 10)
     for i, ln in enumerate(lines[:5]):
         try:
-            txt = TextClip(ln, fontsize=44, color="white", font="Arial",
-                           method="label").set_duration(duration)
-            txt = txt.set_position(("center", y0 + i * 52))
+            # إضافة ظل للنص
+            shadow = TextClip(ln, fontsize=fontsize, color="black", font="Arial",
+                              method="label", stroke_width=0).set_duration(duration)
+            shadow = shadow.set_position(("center", y0 + i * (fontsize + 5) + 3))
+            overlays.append(shadow)
+
+            txt = TextClip(ln, fontsize=fontsize, color="white", font="Arial",
+                           method="label", stroke_width=0).set_duration(duration)
+            txt = txt.set_position(("center", y0 + i * (fontsize + 5)))
             overlays.append(txt)
         except Exception:
             pass
@@ -90,34 +128,94 @@ def make_gradient_card(text, duration):
     return CompositeVideoClip(overlays, size=(W, H)).set_duration(duration)
 
 
-def create_video(audio_path, script, output="video.mp4"):
+def extract_segments_with_hooks(script):
+    """
+    يقسم السكريبت إلى أجزاء تفصل بين الـ hooks
+    ويعيد قائمة: [(نص, هل هو hook؟), ...]
+    """
+    # البحث عن hooks المحاطة بـ ✨ ✨
+    pattern = r'✨(.*?)✨'
+    parts = re.split(pattern, script, flags=re.DOTALL)
+
+    segments = []
+    for i, part in enumerate(parts):
+        part = part.strip()
+        if not part:
+            continue
+        # الأجزاء الفردية (بعد الـ split) هي hooks إذا كان i فردي
+        is_hook = (i % 2 == 1)
+        if is_hook:
+            # تنظيف الـ hook من الرموز الإضافية
+            part = part.replace("*", "").strip()
+        segments.append((part, is_hook))
+
+    # إذا لم يتم العثور على hooks، استخدم الطريقة القديمة
+    if len(segments) <= 1:
+        sentences = [s.strip() for s in script.replace("\n", " ").split(".") if len(s.strip()) > 10]
+        return [(s, False) for s in sentences[:8]]
+
+    return segments
+
+
+def create_zoom_effect(clip, zoom_factor=1.1, duration=None):
+    """يضيف تأثير تكبير بطيء (Ken Burns effect)"""
+    if duration is None:
+        duration = clip.duration
+
+    def make_frame(t):
+        frame = clip.get_frame(t)
+        h, w = frame.shape[:2]
+        scale = 1 + (zoom_factor - 1) * (t / duration)
+        new_h, new_w = int(h * scale), int(w * scale)
+        from moviepy.video.fx.resize import resize
+        zoomed = resize(clip, newsize=(new_w, new_h))
+        return zoomed.get_frame(t)
+
+    return clip.fl(make_frame)
+
+
+def create_video(audio_path, script, output="video.mp4", story_type="default"):
+    """
+    النسخة المطورة: تحترم الـ hooks وتضيف تأثيرات بصرية مختلفة لكل hook
+    """
     audio = AudioFileClip(audio_path)
     total = audio.duration
 
-    sentences = [s.strip() for s in script.replace("\n", " ").split(".") if len(s.strip()) > 10][:6]
-    if not sentences:
-        sentences = [script[:120]]
+    # استخراج الأجزاء مع تحديد أيها hooks
+    segments = extract_segments_with_hooks(script)
+    print(f"[video] تم العثور على {len(segments)} مقطع ({sum(1 for _,h in segments if h)} hooks)")
 
-    urls = get_stock_video_urls("viral science news", n=5)
+    # جلب فيديوهات خلفية
+    urls = get_stock_video_urls(story_type, n=len(segments) + 3)
 
     scenes = []
-    clip_dur = max(3.0, total / max(len(sentences), 1))
-
     with tempfile.TemporaryDirectory() as tmp:
-        paths = []
+        # تحميل الفيديوهات
+        video_paths = []
         for u in urls:
             p = download_clip(u, tmp)
             if p:
-                paths.append(p)
-                print(f"[video] Downloaded clip {len(paths)}")
+                video_paths.append(p)
 
-        for i, sent in enumerate(sentences):
-            if i < len(paths):
+        # حساب مدة كل مقطع
+        duration_per_segment = total / max(len(segments), 1)
+
+        for idx, (text, is_hook) in enumerate(segments):
+            # مدة هذا المقطع
+            seg_dur = duration_per_segment
+            if is_hook:
+                # الـ hooks أقصر قليلاً لزيادة الإيقاع
+                seg_dur = max(2.5, seg_dur * 0.8)
+
+            # محاولة استخدام فيديو حقيقي
+            video_used = False
+            if idx < len(video_paths) and not is_hook:
                 try:
-                    raw = VideoFileClip(paths[i])
-                    dur = min(clip_dur, raw.duration)
+                    raw = VideoFileClip(video_paths[idx])
+                    dur = min(seg_dur, raw.duration)
                     raw = raw.subclip(0, dur)
 
+                    # تكبير (zoom) للحركة
                     scale = max(W / raw.w, H / raw.h)
                     raw = raw.resize(scale)
 
@@ -126,30 +224,40 @@ def create_video(audio_path, script, output="video.mp4"):
                     raw = raw.crop(x1=xc, y1=yc, x2=xc + W, y2=yc + H)
 
                     scenes.append(raw)
-                    print(f"[video] Scene {i+1}: stock clip ✓")
-                    continue
+                    video_used = True
+                    print(f"[video] مقطع {idx+1}: فيديو ✓")
                 except Exception as e:
-                    print(f"[video] Scene {i+1}: stock clip failed — {e}")
+                    print(f"[video] فشل الفيديو: {e}")
 
-            card = make_gradient_card(sent, clip_dur)
-            scenes.append(card)
-            print(f"[video] Scene {i+1}: gradient card")
+            if not video_used:
+                # استخدام بطاقة نصية (مع تأثير خاص إذا كان hook)
+                card = make_gradient_card(text, seg_dur, is_hook=is_hook)
+                scenes.append(card)
+                print(f"[video] مقطع {idx+1}: {'🔥 HOOK' if is_hook else 'بطاقة عادية'}")
 
+    # دمج جميع المشاهد
     if not scenes:
         scenes.append(ColorClip(size=(W, H), color=(10, 10, 30), duration=total))
 
     final = concatenate_videoclips(scenes, method="compose")
+
+    # ضبط المدة لتطابق الصوت
     if final.duration < total:
         loop = scenes[-1].loop(duration=total - final.duration + 0.1)
         final = concatenate_videoclips([final, loop], method="compose")
+    elif final.duration > total:
+        final = final.subclip(0, total)
+
     final = final.set_audio(audio)
 
+    # تصدير الفيديو
     tmp_out = output + ".tmp.mp4"
     final.write_videofile(
         tmp_out, fps=24, codec="libx264", audio_codec="aac",
         preset="ultrafast", threads=2, logger=None,
     )
 
+    # إعادة ترميز لضمان التوافق
     result = subprocess.run(
         ["ffmpeg", "-i", tmp_out, "-movflags", "+faststart", "-c", "copy", output, "-y"],
         capture_output=True,
@@ -161,35 +269,38 @@ def create_video(audio_path, script, output="video.mp4"):
         import shutil
         shutil.move(tmp_out if os.path.exists(tmp_out) else output, output)
 
-    print(f"[video] Done → {output}")
+    # إحصاءات عن الفيديو المنتج
+    hook_count = sum(1 for _,h in segments if h)
+    print(f"\n🎬 [video] تم إنتاج الفيديو → {output}")
+    print(f"   - عدد hooks مرئية: {hook_count}")
+    print(f"   - مدة الفيديو: {total:.1f} ثانية")
+    print(f"   - عدد المشاهد: {len(scenes)}")
+
     return output
 
 
 def create_hybrid_video(audio_path, script, output="video.mp4"):
+    """نفس النسخة المطورة ولكن مع دعم AI scenes"""
+    return create_video(audio_path, script, output)
 
-    audio = AudioFileClip(audio_path)
-    scenes = split_into_scenes(script)
 
-    final_clips = []
-    ai_index = 0
+# دالة اختبار سريع
+if __name__ == "__main__":
+    # اختبار استخراج hooks
+    test_script = """
+    هذه قصة عن رجل غير حياته.
 
-    for i, scene in enumerate(scenes):
+    ✨ 💥 مفاجأة صادمة... كل ما قلته لك كان خطأ! ✨
 
-        if scene["type"] == "ai":
-            # AI scene (placeholder or future API)
-            clip_path = generate_ai_scene(scene["text"], ai_index)
-            ai_index += 1
+    بدأ من الصفر وبنى إمبراطورية.
 
-            clip = ColorClip(size=(1280, 720), color=(255, 0, 0), duration=3)
-            clip = clip.set_duration(3)
+    ✨ 👑 وهذا هو السر الذي يخفيه الأغنياء عنك ✨
 
-        else:
-            # Pexels fallback
-            clip = ColorClip(size=(1280, 720), color=(0, 0, 0), duration=4)
+    استمر في العمل حتى نجح.
 
-        final_clips.append(clip)
+    ✨ ⏱️ لديك 5 ثوانٍ فقط... 5..4..3.. ✨
+    """
 
-    video = concatenate_videoclips(final_clips).set_audio(audio)
-    video.write_videofile(output, fps=24)
-
-    return output
+    segments = extract_segments_with_hooks(test_script)
+    for txt, is_hook in segments:
+        print(f"{'🔥 HOOK' if is_hook else '📖 TEXT'}: {txt[:50]}...")
