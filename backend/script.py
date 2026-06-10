@@ -6,10 +6,7 @@ from hook_ai import detect_story_type, generate_hook
 from retention_engine import insert_retention_hooks
 from emotion_engine import optimize_for_narration
 
-if not MOCK_MODE:
-    client = OpenAI(api_key=OPENAI_API_KEY)
-else:
-    client = None
+client = None
 
 
 # --------------------------------------------------
@@ -132,7 +129,8 @@ Structure:
 Make it feel like a real unexplained internet phenomenon.
 """
 
-    response = client.chat.completions.create(
+    _client = OpenAI(api_key=OPENAI_API_KEY)
+    response = _client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}]
     )
@@ -183,7 +181,8 @@ Return a JSON object with EXACTLY these fields:
 
 Return ONLY valid JSON — no markdown, no code fences, no extra text."""
 
-    response = client.chat.completions.create(
+    _client = OpenAI(api_key=OPENAI_API_KEY)
+    response = _client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
