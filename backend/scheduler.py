@@ -1,3 +1,7 @@
+import os
+import shutil
+from datetime import datetime
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from viral_engine import get_viral_story
 from hook_ai import detect_story_type
@@ -6,6 +10,8 @@ from voice import text_to_speech
 from video import create_video
 from package_builder import build_content_package
 from notify import send_notification
+
+VIDEOS_DIR = os.path.join(os.path.dirname(__file__), "output", "videos")
 
 _latest_package: dict = {}
 
@@ -35,8 +41,8 @@ def job():
     tags = content.get("tags", [])
     print(f"[scheduler] Generated title: {title[:60]}...")
 
-    # 4. توليد السكريبت (مع تمرير القصة ونوعها)
-    script = generate_script(topic, story_type)
+    # 4. توليد السكريبت
+    script = generate_script()
     print(f"[scheduler] Script generated: {len(script)} characters")
 
     # 5. تحويل النص إلى صوت (MP3)
@@ -58,10 +64,19 @@ def job():
         video_path=video,
     )
 
+    # 8. حفظ نسخة أرشيفية من الفيديو بـ timestamp
+    os.makedirs(VIDEOS_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    archived_video = os.path.join(VIDEOS_DIR, f"video_{timestamp}.mp4")
+    if os.path.exists(video):
+        shutil.copy2(video, archived_video)
+        print(f"[scheduler] Archived video → {archived_video}")
+    package["archived_video"] = f"video_{timestamp}.mp4"
+
     _latest_package = package
     print("[scheduler] Daily job completed successfully!")
 
-    # 8. إرسال إشعار (يمكن تفعيل Telegram لاحقاً)
+    # 9. إرسال إشعار (يمكن تفعيل Telegram لاحقاً)
     send_notification(f"✅ Daily Content Package Ready!\n📹 {title[:50]}...")
 
     return package

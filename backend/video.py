@@ -18,7 +18,7 @@ from moviepy.editor import (
 import numpy as np
 
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
-W, H = 1280, 720
+W, H = 960, 540
 
 
 def get_stock_video_urls(query="motivation business success", n=8):
@@ -75,25 +75,22 @@ def download_clip(url, tmp_dir):
 
 def make_gradient_card(text, duration, is_hook=False):
     """
-    يصنع بطاقة نصية جميلة مع تأثير خاص إذا كانت hook
+    Renders text onto a gradient using PIL — single static ImageClip.
+    No per-frame Python rendering, so encoding is fast.
     """
-    # خلفية متدرجة
-    if is_hook:
-        # ألوان جريئة للـ hook (أحمر/برتقالي)
-        gradient = np.zeros((H, W, 3), dtype=np.uint8)
-        for y in range(H):
-            t = y / H
-            gradient[y, :] = [int(100 + 100 * t), int(20 + 40 * t), int(20 + 30 * t)]
-    else:
-        # ألوان هادئة للقصة العادية
-        gradient = np.zeros((H, W, 3), dtype=np.uint8)
-        for y in range(H):
-            t = y / H
-            gradient[y, :] = [int(5 + 25 * t), int(5 + 15 * t), int(20 + 45 * t)]
+    from PIL import Image, ImageDraw, ImageFont
 
-    bg = ImageClip(gradient).set_duration(duration)
+    arr = np.zeros((H, W, 3), dtype=np.uint8)
+    for y in range(H):
+        t = y / H
+        if is_hook:
+            arr[y, :] = [int(100 + 100 * t), int(20 + 40 * t), int(20 + 30 * t)]
+        else:
+            arr[y, :] = [int(5 + 25 * t), int(5 + 15 * t), int(20 + 45 * t)]
 
-    # تنسيق النص
+    pil_img = Image.fromarray(arr)
+    draw = ImageDraw.Draw(pil_img)
+
     words = text.strip().split()
     lines, line = [], []
     for w in words:
@@ -104,28 +101,31 @@ def make_gradient_card(text, duration, is_hook=False):
     if line:
         lines.append(" ".join(line))
 
-    overlays = [bg]
+    fontsize = 48 if is_hook else 40
+    font = None
+    for fp in [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+    ]:
+        try:
+            font = ImageFont.truetype(fp, fontsize)
+            break
+        except Exception:
+            pass
+    if font is None:
+        font = ImageFont.load_default()
 
-    # حجم خط أكبر للـ hook
-    fontsize = 52 if is_hook else 40
-
-    y0 = H // 2 - len(lines) * (fontsize // 2 + 10)
+    y0 = H // 2 - len(lines) * (fontsize // 2 + 8)
     for i, ln in enumerate(lines[:5]):
         try:
-            # إضافة ظل للنص
-            shadow = TextClip(ln, fontsize=fontsize, color="black", font="Arial",
-                              method="label", stroke_width=0).set_duration(duration)
-            shadow = shadow.set_position(("center", y0 + i * (fontsize + 5) + 3))
-            overlays.append(shadow)
-
-            txt = TextClip(ln, fontsize=fontsize, color="white", font="Arial",
-                           method="label", stroke_width=0).set_duration(duration)
-            txt = txt.set_position(("center", y0 + i * (fontsize + 5)))
-            overlays.append(txt)
+            bbox = draw.textbbox((0, 0), ln, font=font)
+            x = (W - (bbox[2] - bbox[0])) // 2
+            draw.text((x, y0 + i * (fontsize + 8)), ln, fill=(255, 255, 255), font=font)
         except Exception:
             pass
 
-    return CompositeVideoClip(overlays, size=(W, H)).set_duration(duration)
+    return ImageClip(np.array(pil_img)).set_duration(duration)
 
 
 def extract_segments_with_hooks(script):
@@ -254,7 +254,7 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
     tmp_out = output + ".tmp.mp4"
     final.write_videofile(
         tmp_out, fps=24, codec="libx264", audio_codec="aac",
-        preset="ultrafast", threads=2, logger=None,
+        preset="ultrafast", threads=4, logger=None,
     )
 
     # إعادة ترميز لضمان التوافق
