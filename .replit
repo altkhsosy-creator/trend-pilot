@@ -20,6 +20,10 @@ author = "agent"
 task = "workflow.run"
 args = "backend: Python API"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "backend: Video Gallery"
+
 [[workflows.workflow]]
 name = "backend: Python API"
 author = "agent"
@@ -32,6 +36,18 @@ task = "shell.exec"
 args = "cd backend && uvicorn main:app --host 0.0.0.0 --port 8000"
 waitForPort = 8000
 
+[[workflows.workflow]]
+name = "backend: Video Gallery"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python3 video_gallery.py"
+waitForPort = 3002
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
@@ -43,6 +59,10 @@ timeoutMs = 20000
 [nix]
 channel = "stable-25_05"
 packages = ["ffmpeg-full", "freetype", "imagemagickBig", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "tcl", "tk", "zlib"]
+
+[[ports]]
+localPort = 3002
+externalPort = 3002
 
 [[ports]]
 localPort = 8000
