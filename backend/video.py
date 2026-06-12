@@ -222,10 +222,10 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
 
         for idx, (text, is_hook) in enumerate(segments):
             # مدة هذا المقطع
-            seg_dur = duration_per_segment
+            seg_dur = min(duration_per_segment, 7.0)
             if is_hook:
-                # الـ hooks أقصر قليلاً لزيادة الإيقاع
-                seg_dur = max(2.5, seg_dur * 0.8)
+                # الـ hooks أقصر بـ 30% لزيادة الإيقاع
+                seg_dur = max(2.5, seg_dur * 0.7)
 
             # محاولة استخدام فيديو حقيقي
             video_used = False
