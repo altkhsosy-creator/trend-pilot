@@ -52,6 +52,7 @@ def job():
     # 6. إنشاء الفيديو (مع تمرير نوع القصة للـ video.py)
     video = create_video(audio, script, story_type=story_type)
     print(f"[scheduler] Video generated: {video}")
+    send_notification(f"🎬 فيديو اليوم جاهز!\n\nالعنوان: {title}\n📹 رابط المعاينة: http://46.101.250.86:5001")
 
     # 7. تجميع كل شيء في حزمة محتوى واحدة
     package = build_content_package(
