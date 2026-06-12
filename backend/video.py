@@ -24,6 +24,20 @@ except ImportError:
 import numpy as np
 
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
+
+
+def _set_dur(clip, duration):
+    if hasattr(clip, 'with_duration'):
+        return clip.with_duration(duration)
+    return clip.set_duration(duration)
+
+
+def _set_audio(clip, audio):
+    if hasattr(clip, 'with_audio'):
+        return clip.with_audio(audio)
+    return clip.set_audio(audio)
+
+
 W, H = 960, 540
 
 
@@ -131,7 +145,7 @@ def make_gradient_card(text, duration, is_hook=False):
         except Exception:
             pass
 
-    return ImageClip(np.array(pil_img)).with_duration(duration)
+    return _set_dur(ImageClip(np.array(pil_img)), duration)
 
 
 def extract_segments_with_hooks(script):
@@ -254,7 +268,7 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
     elif final.duration > total:
         final = final.subclip(0, total)
 
-    final = final.with_audio(audio)
+    final = _set_audio(final, audio)
 
     # تصدير الفيديو
     tmp_out = output + ".tmp.mp4"
