@@ -84,3 +84,5 @@ externalPort = 3000
 
 [userenv.shared]
 MOCK_MODE = "true"
+TELEGRAM_BOT_TOKEN = "8326360956:AAEd2tn8-CHzbvPEnBh1mPE2byx9zQDl-VM"
+TELEGRAM_CHAT_ID = "918121977"
