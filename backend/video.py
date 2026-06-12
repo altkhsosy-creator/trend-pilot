@@ -145,7 +145,19 @@ def make_gradient_card(text, duration, is_hook=False):
         except Exception:
             pass
 
-    return _set_dur(ImageClip(np.array(pil_img)), duration)
+    card = _set_dur(ImageClip(np.array(pil_img)), duration)
+
+    # تأثير zoom بطيء: من scale=1.0 إلى scale=1.05 على مدى المقطع
+    card = card.resize(lambda t: 1 + 0.05 * (t / duration))
+    # قص لإعادة الأبعاد الأصلية (W×H) بعد التكبير
+    card = card.crop(
+        x_center=card.w / 2,
+        y_center=card.h / 2,
+        width=W,
+        height=H,
+    )
+
+    return card
 
 
 def extract_segments_with_hooks(script):
