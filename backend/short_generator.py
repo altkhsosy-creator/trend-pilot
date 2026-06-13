@@ -12,7 +12,10 @@ def extract_shorts(long_video_path, num_shorts=3, duration=60):
         return []
     
     shorts_paths = []
-    output_dir = "/root/trend-pilot/backend/output/shorts"
+    # يعمل على السيرفر (DigitalOcean) وعلى Replit
+    server_path = "/root/trend-pilot/backend/output/shorts"
+    local_path = os.path.join(os.path.dirname(__file__), "output", "shorts")
+    output_dir = server_path if os.path.exists("/root/trend-pilot") else local_path
     os.makedirs(output_dir, exist_ok=True)
     
     # الحصول على مدة الفيديو
