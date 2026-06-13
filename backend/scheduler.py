@@ -74,6 +74,19 @@ def job():
         print(f"[scheduler] Archived video → {archived_video}")
     package["archived_video"] = f"video_{timestamp}.mp4"
 
+    # نسخ Shorts إلى مجلد النشر
+    shorts_dir = "/root/trend-pilot/backend/output/shorts"
+    os.makedirs(shorts_dir, exist_ok=True)
+
+    # هذا افتراض أن لديك قائمة shorts_paths
+    # إذا لم تكن موجودة، سنضيفها لاحقاً
+    if 'shorts_paths' in dir() and shorts_paths:
+        for i, short_path in enumerate(shorts_paths):
+            if os.path.exists(short_path):
+                short_dest = os.path.join(shorts_dir, f"short_{i+1}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
+                shutil.copy(short_path, short_dest)
+                print(f"[scheduler] Copied short to: {short_dest}")
+
     _latest_package = package
     print("[scheduler] Daily job completed successfully!")
 
