@@ -1,27 +1,64 @@
 import os
 import requests
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-
-def send_notification(message: str) -> bool:
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print(f"NOTIFY: {message}")
-        return False
+def send_notification(message):
+    """إرسال رسالة نصية عادية"""
+    if not TELEGRAM_BOT_TOKEN:
+        print("[notify] No TELEGRAM_BOT_TOKEN found")
+        return
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
     try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        resp = requests.post(url, json={
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": message,
-            "parse_mode": "HTML",
-        }, timeout=10)
-        if resp.ok:
-            print("[notify] Telegram message sent ✅")
-            return True
-        else:
-            print(f"[notify] Telegram error: {resp.text}")
-            return False
+        requests.post(url, json=payload, timeout=10)
     except Exception as e:
-        print(f"[notify] Failed to send notification: {e}")
-        return False
+        print(f"[notify] Error: {e}")
+
+def send_approval_request(video_type, video_name, scheduled_time):
+    """إرسال طلب موافقة مع أزرار"""
+    if not TELEGRAM_BOT_TOKEN:
+        print("[notify] No TELEGRAM_BOT_TOKEN found")
+        return
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    
+    # إنشاء أزرار مدمجة
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "✅ نشر", "callback_data": f"approve_{video_type}_{video_name}"},
+                {"text": "❌ رفض", "callback_data": f"reject_{video_type}_{video_name}"}
+            ]
+        ]
+    }
+    
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": f"📺 **طلب موافقة على النشر**\n\nالنوع: {video_type}\nالملف: {video_name}\nالموعد المحدد: {scheduled_time}",
+        "parse_mode": "Markdown",
+        "reply_markup": keyboard
+    }
+    
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        print(f"[notify] Approval request sent: {response.status_code}")
+    except Exception as e:
+        print(f"[notify] Error: {e}")
+
+def handle_callback(callback_data):
+    """معالج الأزرار - يستقبل approve/reject"""
+    if callback_data.startswith("approve_"):
+        # هنا سنضيف كود النشر الفعلي لاحقاً
+        send_notification(f"✅ تمت الموافقة على نشر: {callback_data}")
+        return "approved"
+    elif callback_data.startswith("reject_"):
+        send_notification(f"❌ تم رفض النشر: {callback_data}")
+        return "rejected"
+    return "unknown"
