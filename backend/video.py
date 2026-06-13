@@ -122,19 +122,23 @@ def add_segment_music(video_segment, segment_type, duration):
         return video_segment
 
 
-def get_stock_video_urls(query="motivation business success", n=8):
+def get_stock_video_urls(query="dark mystery investigation", n=8):
     """يجلب فيديوهات من Pexels حسب موضوع القصة"""
     if not PEXELS_API_KEY:
         return []
 
-    # تحسين الـ query حسب نوع القصة
+    # True Crime & Mystery focused queries
     queries = {
-        "business": "business success entrepreneur",
-        "tech": "technology future coding",
-        "horror": "dark mystery suspense",
-        "inspirational": "sunset mountain hope",
-        "science": "science space discovery",
-        "default": "motivation viral trend"
+        "true_crime":    "dark crime investigation detective",
+        "mystery":       "dark forest mystery abandoned",
+        "horror":        "dark shadow horror suspense night",
+        "shock":         "dark dramatic thriller",
+        "business":      "business success entrepreneur",
+        "tech":          "technology future coding",
+        "inspirational": "sunset mountain hope journey",
+        "science":       "science space discovery lab",
+        "reddit":        "dark room computer screen night",
+        "default":       "dark mystery investigation crime",
     }
 
     actual_query = queries.get(query, query) if isinstance(query, str) else queries["default"]
@@ -301,7 +305,6 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
     # جلب فيديوهات خلفية
     urls = get_stock_video_urls(story_type, n=len(segments) + 3)
 
-    scenes = []
     with tempfile.TemporaryDirectory() as tmp:
         # تحميل الفيديوهات
         video_paths = []
@@ -317,20 +320,18 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
         hook_indices = [i for i, (_, h) in enumerate(segments) if h]
         n_segments = len(segments)
         elapsed_time = 0.0
+        scenes = []
 
         for idx, (text, is_hook) in enumerate(segments):
-            # مدة هذا المقطع
             seg_dur = min(duration_per_segment, 7.0)
             if is_hook:
                 seg_dur = max(2.5, seg_dur * 0.7)
 
-            # تحديد نوع الموسيقى بالنظام الذكي
             seg_music_type = detect_music_type(
                 text, idx, n_segments, is_hook, hook_indices,
                 elapsed_time, total,
             )
 
-            # محاولة استخدام فيديو حقيقي
             video_used = False
             if idx < len(video_paths) and not is_hook:
                 try:
@@ -338,10 +339,9 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
                     dur = min(seg_dur, raw.duration)
                     raw = raw.subclip(0, dur)
 
-                    # تكبير (zoom) للحركة
-                    scale = max(W / raw.w, H / raw.h)
+                    # fit to frame, crop center
+                    scale = max(W / raw.w, H / raw.h) * 1.05
                     raw = raw.resize(scale)
-
                     xc = (raw.w - W) / 2
                     yc = (raw.h - H) / 2
                     raw = raw.crop(x1=xc, y1=yc, x2=xc + W, y2=yc + H)
@@ -361,33 +361,30 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
 
             elapsed_time += seg_dur
 
-    # دمج جميع المشاهد
-    if not scenes:
-        scenes.append(ColorClip(size=(W, H), color=(10, 10, 30), duration=total))
+        # دمج جميع المشاهد — داخل tmp حتى لا تُحذف ملفات Pexels قبل التصدير
+        if not scenes:
+            scenes.append(ColorClip(size=(W, H), color=(10, 10, 30), duration=total))
 
-    final = concatenate_videoclips(scenes, method="compose")
+        final = concatenate_videoclips(scenes, method="compose")
 
-    # ضبط المدة لتطابق الصوت
-    if final.duration < total:
-        loop = scenes[-1].loop(duration=total - final.duration + 0.1)
-        final = concatenate_videoclips([final, loop], method="compose")
-    elif final.duration > total:
-        final = final.subclip(0, total)
+        if final.duration < total:
+            loop = scenes[-1].loop(duration=total - final.duration + 0.1)
+            final = concatenate_videoclips([final, loop], method="compose")
+        elif final.duration > total:
+            final = final.subclip(0, total)
 
-    # خلط صوت الراوي مع الموسيقى الخلفية (إن وُجدت)
-    if final.audio:
-        final = _set_audio(final, CompositeAudioClip([audio, final.audio]))
-    else:
-        final = _set_audio(final, audio)
+        if final.audio:
+            final = _set_audio(final, CompositeAudioClip([audio, final.audio]))
+        else:
+            final = _set_audio(final, audio)
 
-    # تصدير الفيديو
-    tmp_out = output + ".tmp.mp4"
-    final.write_videofile(
-        tmp_out, fps=24, codec="libx264", audio_codec="aac",
-        preset="ultrafast", threads=4, logger=None,
-    )
+        tmp_out = output + ".tmp.mp4"
+        final.write_videofile(
+            tmp_out, fps=24, codec="libx264", audio_codec="aac",
+            preset="ultrafast", threads=4, logger=None,
+        )
 
-    # إعادة ترميز لضمان التوافق
+    # إعادة ترميز بعد إغلاق tmp — tmp_out في مجلد output وليس في tmp
     result = subprocess.run(
         ["ffmpeg", "-i", tmp_out, "-movflags", "+faststart", "-c", "copy", output, "-y"],
         capture_output=True,
@@ -399,12 +396,10 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
         import shutil
         shutil.move(tmp_out if os.path.exists(tmp_out) else output, output)
 
-    # إحصاءات عن الفيديو المنتج
-    hook_count = sum(1 for _,h in segments if h)
+    hook_count = sum(1 for _, h in segments if h)
     print(f"\n🎬 [video] تم إنتاج الفيديو → {output}")
-    print(f"   - عدد hooks مرئية: {hook_count}")
     print(f"   - مدة الفيديو: {total:.1f} ثانية")
-    print(f"   - عدد المشاهد: {len(scenes)}")
+    print(f"   - عدد hooks: {hook_count} | عدد المشاهد: {len(scenes)}")
 
     return output
 

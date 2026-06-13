@@ -1,18 +1,22 @@
-# نظام الموسيقى الديناميكي - يغير الموسيقى حسب نوع المقطع
+# True Crime Music System — dynamic per-segment music selection
 
 SEGMENT_MUSIC = {
-    "hook_start": "bgm_suspense.mp3",      # بداية hook - تشويق سريع
-    "hook_middle": "bgm_investigative.mp3", # وسط hook - تصاعد
-    "hook_end": "bgm_horror.mp3",          # نهاية hook - صدمة/رعب
-    
-    "story_normal": "bgm_calm.mp3",         # سرد عادي - موسيقى هادئة
-    "story_tension": "bgm_suspense.mp3",    # لحظات توتر - تشويق
-    "story_climax": "bgm_final_boss.mp3",   # الذروة - موسيقى قوية
-    
-    "emotional": "bgm_reflective.mp3",      # لحظات عاطفية
-    "closing": "bgm_mystery.mp3"           # خاتمة - غموض
+    # Hooks — bgm_suspense for max tension at the start
+    "hook_start":   "bgm_suspense.mp3",      # opening hook — immediate tension
+    "hook_middle":  "bgm_investigative.mp3", # mid-story hook — building dread
+    "hook_end":     "bgm_horror.mp3",        # climax hook — shock/horror
+
+    # Story narration
+    "story_normal": "bgm_calm.mp3",          # regular narration — calm, atmospheric
+    "story_tension":"bgm_suspense.mp3",      # tension moments — suspenseful
+    "story_climax": "bgm_horror.mp3",        # peak climax — horror/shock
+
+    # Special moments
+    "emotional":    "bgm_reflective.mp3",    # emotional beats — reflective
+    "closing":      "bgm_mystery.mp3",       # haunting ending — lingering mystery
 }
 
+
 def get_music_for_segment(segment_type: str) -> str:
-    """إرجاع اسم ملف الموسيقى المناسب لنوع المقطع"""
+    """Returns the correct background music filename for a given segment type."""
     return SEGMENT_MUSIC.get(segment_type, "bgm_calm.mp3")

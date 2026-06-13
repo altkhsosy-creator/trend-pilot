@@ -3,54 +3,59 @@ import random
 from config import MOCK_MODE
 
 # -------------------------------------------------------
-# Mock stories — real-event / mystery / Reddit style
+# Mock stories — True Crime & Unsolved Mysteries
 # -------------------------------------------------------
 _MOCK_STORIES = [
     {
-        "title": "My neighbor disappeared 3 years ago. The police found her car yesterday — engine still running.",
-        "score": 94300,
-        "comments": 8120,
+        "title": "The Zodiac Killer sent 4 encrypted ciphers. Three were solved. The last one was cracked in 2020 — and what it said shocked investigators.",
+        "score": 124300,
+        "comments": 14200,
         "subreddit": "UnresolvedMysteries",
         "url": "https://reddit.com/r/UnresolvedMysteries",
     },
     {
-        "title": "A man in Ohio woke up in 2003 with no memory of the last 11 years. He had a wife, 2 kids, and a job he'd never heard of.",
-        "score": 87600,
-        "comments": 6430,
-        "subreddit": "UnresolvedMysteries",
-        "url": "https://reddit.com/r/UnresolvedMysteries",
+        "title": "A woman was found mummified in her apartment — her TV still on. She had been dead for 3 years. No one noticed.",
+        "score": 98600,
+        "comments": 11430,
+        "subreddit": "TrueCrime",
+        "url": "https://reddit.com/r/TrueCrime",
     },
     {
-        "title": "The Tamam Shud case: A man found dead on an Australian beach with a scrap of paper sewn into his clothing — case still unsolved after 75 years.",
-        "score": 81200,
-        "comments": 5980,
-        "subreddit": "UnresolvedMysteries",
-        "url": "https://reddit.com/r/UnresolvedMysteries",
-    },
-    {
-        "title": "TIFU by discovering my childhood home was used as a crime scene 20 years before we moved in — and nobody told us.",
-        "score": 74500,
+        "title": "The Isdal Woman: Found burned in a Norwegian valley in 1970. False identities, coded diary, mystery destinations. Never identified.",
+        "score": 87100,
         "comments": 9870,
-        "subreddit": "TIFU",
-        "url": "https://reddit.com/r/TIFU",
+        "subreddit": "UnresolvedMysteries",
+        "url": "https://reddit.com/r/UnresolvedMysteries",
     },
     {
-        "title": "In 2007, a couple bought a storage unit for $5 and found evidence of an unsolved murder from 1987 inside.",
-        "score": 68300,
-        "comments": 7210,
-        "subreddit": "interestingasfuck",
-        "url": "https://reddit.com/r/interestingasfuck",
+        "title": "A cold case from 1987 was solved this week — the killer had been living next door to the victim's family for 30 years.",
+        "score": 79400,
+        "comments": 8560,
+        "subreddit": "ColdCases",
+        "url": "https://reddit.com/r/ColdCases",
+    },
+    {
+        "title": "The FBI reopened the DB Cooper hijacking case after a deathbed confession matched 6 previously unknown details.",
+        "score": 91200,
+        "comments": 12100,
+        "subreddit": "TrueCrimeDiscussion",
+        "url": "https://reddit.com/r/TrueCrimeDiscussion",
+    },
+    {
+        "title": "A man disappeared on a camping trip in 1978. His journal was found 40 years later buried under a tree — the final entry will haunt you.",
+        "score": 74300,
+        "comments": 7890,
+        "subreddit": "ColdCases",
+        "url": "https://reddit.com/r/ColdCases",
     },
 ]
 
-# Subreddits to pull from — real/mystery/viral-story focused
+# Subreddits — True Crime & Unsolved Mysteries focused
 _SUBREDDITS = [
     "UnresolvedMysteries",
-    "interestingasfuck",
-    "TIFU",
-    "TrueOffMyChest",
-    "mildlyinfuriating",
-    "AskReddit",
+    "TrueCrime",
+    "ColdCases",
+    "TrueCrimeDiscussion",
 ]
 
 
@@ -59,7 +64,7 @@ _SUBREDDITS = [
 # -------------------------------------------------------
 def _fetch_from_subreddit(subreddit: str) -> list[dict]:
     url = f"https://www.reddit.com/r/{subreddit}/top.json?limit=10&t=day"
-    headers = {"User-agent": "trendpilot-viral-engine/1.0"}
+    headers = {"User-agent": "trendpilot-truecrime/1.0"}
     try:
         res = requests.get(url, headers=headers, timeout=10)
         res.raise_for_status()
@@ -84,7 +89,7 @@ def _fetch_from_subreddit(subreddit: str) -> list[dict]:
 
 def fetch_stories() -> list[dict]:
     if MOCK_MODE:
-        print("[MOCK_MODE] Returning mock viral stories")
+        print("[MOCK_MODE] Returning mock True Crime stories")
         return _MOCK_STORIES
 
     all_stories = []

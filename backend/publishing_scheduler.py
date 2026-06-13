@@ -2,28 +2,33 @@ import os
 import time
 import schedule
 from datetime import datetime
-from notify import send_notification
+from notify import send_notification, send_approval_request, send_content_package_notification
 
-# مسارات الملفات
-LONG_VIDEO_PATH = "/root/trend-pilot/backend/video.mp4"
-SHORTS_DIR = "/root/trend-pilot/backend/output/shorts"
-PUBLISHED_LOG = "/root/trend-pilot/backend/published_log.txt"
+# -------------------------------------------------------
+# Paths
+# -------------------------------------------------------
+BASE = "/root/trend-pilot/backend" if os.path.exists("/root/trend-pilot") else os.path.dirname(__file__)
+LONG_VIDEO_PATH = os.path.join(BASE, "video.mp4")
+SHORTS_DIR      = os.path.join(BASE, "output", "shorts")
+PUBLISHED_LOG   = os.path.join(BASE, "published_log.txt")
+STORY_TITLE_FILE = os.path.join(BASE, "current_story_title.txt")
 
-# أوقات النشر اليومية الأساسية
-LONG_VIDEO_TIME = "10:00"
-SHORTS_TIMES = ["12:00", "16:00", "19:00"]
+# -------------------------------------------------------
+# Publishing schedule
+# -------------------------------------------------------
 
-# أوقات النشر حسب اليوم
+# Long video — morning slot per weekday
 WEEKDAY_LONG_VIDEO = {
-    0: "09:00",   # الإثنين
-    1: "09:00",   # الثلاثاء
-    2: "07:00",   # الأربعاء
-    3: "17:00",   # الخميس
-    4: "12:00",   # الجمعة
-    5: "12:00",   # السبت
-    6: "10:00"    # الأحد
+    0: "09:00",   # Monday
+    1: "09:00",   # Tuesday
+    2: "07:00",   # Wednesday
+    3: "17:00",   # Thursday
+    4: "12:00",   # Friday
+    5: "12:00",   # Saturday
+    6: "10:00",   # Sunday
 }
 
+# 3 Shorts — noon / afternoon / evening per weekday
 WEEKDAY_SHORTS = {
     0: ["12:00", "17:00", "20:00"],
     1: ["12:00", "17:00", "20:00"],
@@ -31,67 +36,131 @@ WEEKDAY_SHORTS = {
     3: ["13:00", "17:00", "20:00"],
     4: ["12:00", "16:00", "19:00"],
     5: ["11:00", "15:00", "20:00"],
-    6: ["12:00", "16:00", "19:00"]
+    6: ["12:00", "16:00", "19:00"],
 }
 
-def get_today_long_time():
-    from datetime import datetime
-    today = datetime.now().weekday()
-    return WEEKDAY_LONG_VIDEO.get(today, LONG_VIDEO_TIME)
+DEFAULT_LONG_TIME  = "10:00"
+DEFAULT_SHORT_TIMES = ["12:00", "16:00", "19:00"]
 
-def get_today_shorts_times():
-    from datetime import datetime
-    today = datetime.now().weekday()
-    return WEEKDAY_SHORTS.get(today, SHORTS_TIMES)
 
-def is_already_published(video_name):
+# -------------------------------------------------------
+# Helpers
+# -------------------------------------------------------
+
+def get_today_long_time() -> str:
+    return WEEKDAY_LONG_VIDEO.get(datetime.now().weekday(), DEFAULT_LONG_TIME)
+
+
+def get_today_shorts_times() -> list[str]:
+    return WEEKDAY_SHORTS.get(datetime.now().weekday(), DEFAULT_SHORT_TIMES)
+
+
+def get_story_title() -> str:
+    """Reads the current story title from disk (written by the main pipeline)."""
+    if os.path.exists(STORY_TITLE_FILE):
+        with open(STORY_TITLE_FILE, "r") as f:
+            return f.read().strip()
+    return "Untitled True Crime Story"
+
+
+def get_shorts_list() -> list[str]:
+    """Returns sorted list of Short video paths in the shorts directory."""
+    if not os.path.exists(SHORTS_DIR):
+        return []
+    return sorted([
+        os.path.join(SHORTS_DIR, f)
+        for f in os.listdir(SHORTS_DIR)
+        if f.endswith(".mp4")
+    ])
+
+
+def is_already_published(key: str) -> bool:
     if not os.path.exists(PUBLISHED_LOG):
         return False
-    with open(PUBLISHED_LOG, 'r') as f:
-        return video_name in f.read()
+    with open(PUBLISHED_LOG, "r") as f:
+        return key in f.read()
 
-def mark_as_published(video_name):
-    with open(PUBLISHED_LOG, 'a') as f:
-        f.write(f"{video_name}|{datetime.now()}\n")
 
-def request_approval(video_type, video_path, scheduled_time):
-    video_name = os.path.basename(video_path)
-    message = f"📺 طلب موافقة على النشر\n\nالنوع: {video_type}\nالملف: {video_name}\nالموعد المحدد: {scheduled_time}\n\n✅ /approve_{video_type.replace(' ', '_')}_{video_name}\n❌ /reject_{video_type.replace(' ', '_')}_{video_name}"
-    send_notification(message)
-    return video_name
+def mark_as_published(key: str):
+    with open(PUBLISHED_LOG, "a") as f:
+        f.write(f"{key}|{datetime.now().isoformat()}\n")
+
+
+# -------------------------------------------------------
+# Publish actions
+# -------------------------------------------------------
 
 def publish_long_video():
+    """Morning slot — request approval for the long video, then notify."""
     video_name = os.path.basename(LONG_VIDEO_PATH)
     if is_already_published(f"long_{video_name}"):
-        print(f"[publisher] Long video {video_name} already published")
+        print(f"[publisher] Long video already published: {video_name}")
         return
-    request_approval("Long Video", LONG_VIDEO_PATH, get_today_long_time())
-    mark_as_published(f"long_{video_name}")
-    send_notification(f"✅ تم تأكيد نشر الفيديو الطويل: {video_name}")
 
-def publish_shorts():
-    if not os.path.exists(SHORTS_DIR):
+    story_title = get_story_title()
+    scheduled_time = get_today_long_time()
+
+    # Rich content-package notification first
+    shorts = get_shorts_list()
+    send_content_package_notification(story_title, LONG_VIDEO_PATH, shorts)
+
+    # Then inline approval request
+    send_approval_request("Long Video", video_name, f"Morning — {scheduled_time}")
+    mark_as_published(f"long_{video_name}")
+    print(f"[publisher] ✅ Long video approval request sent: {video_name}")
+
+
+def publish_short(short_path: str, slot_label: str):
+    """Publish one Short at a specific time slot."""
+    short_name = os.path.basename(short_path)
+    if is_already_published(f"short_{short_name}"):
+        print(f"[publisher] Short already published: {short_name}")
         return
-    shorts_files = [f for f in os.listdir(SHORTS_DIR) if f.endswith('.mp4')]
-    for short_file in shorts_files:
-        short_path = os.path.join(SHORTS_DIR, short_file)
-        if is_already_published(f"short_{short_file}"):
-            continue
-        request_approval("Short Video", short_path, "مساءً")
+
+    story_title = get_story_title()
+    send_approval_request("Short", short_name, slot_label)
+    mark_as_published(f"short_{short_name}")
+    print(f"[publisher] ✅ Short approval request sent: {short_name} @ {slot_label}")
+
+
+def publish_shorts_slot(slot_index: int, slot_label: str):
+    """
+    Publish one Short per time slot.
+    slot_index 0=noon, 1=afternoon, 2=evening
+    """
+    shorts = get_shorts_list()
+    if slot_index < len(shorts):
+        publish_short(shorts[slot_index], slot_label)
+    else:
+        print(f"[publisher] No short available for slot {slot_index} ({slot_label})")
+
+
+# -------------------------------------------------------
+# Scheduler setup
+# -------------------------------------------------------
 
 def schedule_publishing():
-    import schedule
-    schedule.every().day.at(get_today_long_time()).do(publish_long_video)
-    for short_time in get_today_shorts_times():
-        schedule.every().day.at(short_time).do(publish_shorts)
+    long_time = get_today_long_time()
+    short_times = get_today_shorts_times()
+
+    # Long video — morning
+    schedule.every().day.at(long_time).do(publish_long_video)
+    print(f"[publisher] Long video scheduled at {long_time}")
+
+    # 3 Shorts — noon / afternoon / evening
+    slot_labels = ["Noon", "Afternoon", "Evening"]
+    for i, (t, label) in enumerate(zip(short_times, slot_labels)):
+        schedule.every().day.at(t).do(publish_shorts_slot, slot_index=i, slot_label=f"{label} — {t}")
+        print(f"[publisher] Short {i+1} ({label}) scheduled at {t}")
+
 
 def run_scheduler():
-    import schedule
-    print("[publisher] Starting publishing scheduler...")
+    print("[publisher] Starting True Crime publishing scheduler…")
     schedule_publishing()
     while True:
         schedule.run_pending()
         time.sleep(60)
+
 
 if __name__ == "__main__":
     run_scheduler()

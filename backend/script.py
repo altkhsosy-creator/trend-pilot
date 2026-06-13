@@ -10,74 +10,83 @@ client = None
 
 
 # --------------------------------------------------
-# MOCK DATA — real-event / Reddit-mystery style
+# MOCK DATA — True Crime / Unsolved Mysteries style
 # --------------------------------------------------
 
 _MOCK_SCRIPT = """
-In 2003, a 37-year-old man in Columbus, Ohio woke up one morning convinced he was 26.
+The one detail the FBI missed… changed everything about this case.
 
-He didn't recognize the woman sleeping next to him. He didn't recognize his own house. And when he looked in the mirror, he saw the face of a stranger — older, tired, worn in ways he couldn't explain.
+In 1970, a woman was found dead in a remote valley in Norway. She was lying in a sleeping bag, surrounded by bottles of pills. Her face had been partially burned. Her fingerprints had been removed. And every label on every piece of clothing she was wearing had been cut out.
 
-His name was Gary. And the last thing he remembered was a Tuesday in 1992.
+✨ Nobody knew who she was. ✨
 
-Here's what makes this story impossible to ignore: Gary didn't have amnesia the way movies describe it. He wasn't in a coma. He hadn't been in an accident. He had simply been living — working, eating, raising two kids — for eleven years — with no memory of any of it.
+Investigators called her the Isdal Woman — named after the Isdal Valley where her body was discovered. And for over fifty years, she remained one of the most puzzling unidentified cases in modern European history.
 
-His wife told investigators he had seemed completely normal the entire time. Paid the bills. Showed up to work. Came home. Said "I love you" before bed.
+Here's what makes this case impossible to walk away from.
 
-But Gary remembered none of it.
+She hadn't just wandered into that valley. She had planned to be there. Investigators traced her movements across Europe — Belgium, Switzerland, Italy, Germany, Norway — using a network of fake identities and altered passports. She checked into hotels under at least nine different names.
 
-Now — before you write this off as a fake — here's what the doctors found. And this is the part that will stick with you long after this video ends.
+✨ Nine. ✨
 
-When they ran brain scans, there was no tumor. No stroke damage. No physical explanation whatsoever. What they found instead was a pattern of neural activity that one neurologist described as — and I'm quoting directly here — "like watching two different people living in the same brain, taking turns."
+In one of her suitcases left at a train station, police found a coded diary. Rows of letters and numbers that no one could crack. For decades.
 
-Gary was eventually diagnosed with a dissociative fugue state — a real, documented condition where the brain essentially creates a second operating self. The terrifying part? The doctors told him it could happen again at any time.
+Now — before you assume this was just a sad story about a troubled woman — here's what the forensic evidence actually showed.
 
-He could go to bed tonight as himself — and wake up as someone else.
+The pills found near her body? They weren't enough to kill her. The official cause of death listed phenobarbital poisoning combined with burns — but the fire didn't start until after she was already dying. Someone arranged the scene.
 
-Stop for a second and think about what that means. Every decision you made today, every memory you're building right now — what if none of it is guaranteed to stay with you?
+✨ This was not a suicide. ✨
 
-Gary spent years trying to piece together the decade he lost. He talked to coworkers who remembered him laughing at lunch. Friends who said he seemed completely fine. His daughter, who was two years old in 1992 and thirteen when he "woke up," tried to explain to her father who she was — and watched him cry, not from sadness, but from the complete absence of recognition.
+In 2016, a Norwegian public broadcaster launched a full reinvestigation. Forensic scientists rebuilt her facial structure. Linguists analyzed her accent from witness interviews. Intelligence experts reviewed her travel patterns.
 
-There's a detail that Gary shared in a 2006 interview that I can't stop thinking about. During those eleven years — the years he has no memory of — he apparently kept a journal. Dozens of notebooks filled with daily entries.
+What they concluded was carefully worded — but unmistakable. The Isdal Woman had almost certainly been working as an intelligence operative during the Cold War. Her movements matched the travel patterns of known agents. Her use of coded communication and multiple identities was professional-grade tradecraft.
 
-He read them after. Every single page.
+Someone killed her. And whoever killed her had the resources and the access to make sure she was never identified.
 
-He said it felt like reading about a stranger who happened to have his name.
+Here's the detail that the FBI — and most Western intelligence agencies — never fully addressed.
 
-Here's the question that no one has been able to answer — not the neurologists, not the psychologists, not Gary himself: if a version of you lived for eleven years, made decisions, built relationships, raised children — and then simply stopped existing — was that person you?
+Her coded diary was finally partially decoded in 2017. And inside it, investigators found references to at least three other individuals — using the same cipher structure. None of those individuals have ever been publicly identified.
 
-And if it wasn't you — then who was it?
+She knew people. People who are still unknown. People who may still be alive.
 
-Gary's case was never fully explained. There are three other documented cases with almost identical patterns from the same decade. Researchers at two separate universities have been quietly studying them. As of the last update in late 2022, they still don't have an answer.
+Stop and think about what that means. Somewhere, right now, there may be people who knew exactly who the Isdal Woman was — who she was working for, why she was killed, and who gave the order.
 
-The journals Gary kept are sitting in a storage unit in Ohio. He has never gone back to read them a second time.
+And they have never said a word.
 
-He says he's afraid of what he might find.
+The case remains officially open. Norwegian police have never closed it. Her identity has never been confirmed. The three names in the coded diary have never been released.
+
+Here's the question I keep coming back to — and I don't have an answer for it:
+
+If she was an intelligence operative, why would the agency she worked for allow her to remain unidentified for over fifty years? Why not quietly claim her? Why not give her a name, even a false one, and close the file?
+
+Unless closing the file would reveal something worse than leaving it open.
+
+The Isdal Woman is buried in a Catholic cemetery in Bergen, Norway. Her grave marker reads: Ukjent Kvinne. Unknown Woman.
+
+She's been there for fifty-four years.
+
+And we still don't know her name.
 """.strip()
 
 _MOCK_DESCRIPTION = """
-In 2003, a man in Ohio woke up believing he was 26 — but he was actually 37. Eleven years of his life were simply gone. His wife had no idea. His kids had grown up around him. And doctors found something in his brain scans that they still can't explain.
+In 1970, a woman was found dead in a Norwegian valley. Every label on her clothing had been cut out. Her fingerprints had been removed. She had traveled across Europe under nine different fake identities. And she left behind a coded diary that took nearly 50 years to partially crack.
 
-This video dives into one of the most disturbing documented cases of dissociative fugue on record — a real condition, with real victims, and zero answers.
+This is the Isdal Woman — one of the most chilling unsolved mysteries in Cold War history.
 
-What happens when your brain builds an entirely different version of you — and lets it live your life while you're gone?
+🔔 Subscribe for true crime and unsolved mysteries every week.
+👇 Drop a comment: Do you think she was a spy?
 
-🔔 Subscribe for real stories that are stranger than fiction.
-👇 Comment below: Would you want to read the journals?
-
-#truemystery #psychology #unsolved #reddit #realstory #brainscience #dissociation #viral #mindblowing #documentary
+#truecrime #unsolvedmysteries #coldcase #isdal #coldwar #documentary #mystery #crimestory #investigation
 """.strip()
 
 _MOCK_TAGS = [
-    "true mystery", "unsolved cases", "real story", "psychology facts",
-    "dissociative fugue", "reddit mystery", "mind blowing", "true crime adjacent",
-    "viral story", "documentary"
+    "true crime", "unsolved mysteries", "cold case", "Isdal Woman", "Cold War spy",
+    "unidentified woman", "forensic", "mystery", "documentary", "criminal investigation"
 ]
 
 
 def _mock_content(topic: str) -> dict:
     return {
-        "title": "He Woke Up in 2003 With No Memory of 11 Years — Doctors Found Something Terrifying",
+        "title": "She Was Found Dead With 9 Fake Identities — 54 Years Later, Nobody Knows Her Name",
         "script": _MOCK_SCRIPT,
         "description": _MOCK_DESCRIPTION,
         "tags": _MOCK_TAGS,
@@ -90,7 +99,7 @@ def _mock_content(topic: str) -> dict:
 
 def generate_script() -> str:
     if MOCK_MODE:
-        print("[MOCK_MODE] Skipping OpenAI — returning mock script")
+        print("[MOCK_MODE] Skipping OpenAI — returning mock True Crime script")
         return optimize_for_narration(insert_retention_hooks(_MOCK_SCRIPT))
 
     story = get_viral_story()
@@ -98,35 +107,35 @@ def generate_script() -> str:
     hook = generate_hook(story['title'], story_type)
 
     prompt = f"""
-You are a viral YouTube documentary script writer.
+You are a master True Crime storyteller in the style of MrBallen and Rotten Mango.
 
-IMPORTANT:
 Start the script with EXACTLY this hook:
 
 "{hook}"
 
 Rules:
-- Hook must be first 5–10 seconds of video
-- Then immediately transition into story
-- Maintain high curiosity every 30–60 seconds
-- Keep viewer retention extremely high
-- Length: 1500–1800 words
-- Ending must be unresolved or shocking
+- Hook is first 10-15 seconds — it must stop the scroll immediately
+- Then drop straight into the story with zero fluff
+- Add dramatic pauses (…) before every major revelation
+- Include emotional analysis — what was the victim feeling? What was the killer thinking?
+- Add a cliffhanger every 90 seconds to maintain retention
+- Add personal commentary: "Here's what gets me about this case…", "The detail I can't stop thinking about…"
+- Length: 2200-2600 words (10-12 minutes of narration)
+- End with an open question that haunts the viewer
 
-Use this REAL viral Reddit story as your source:
-
+Use this TRUE CRIME story as your source:
 Title: {story['title']}
-Score: {story['score']}
 
 Structure:
-1. Hook (use the exact hook above)
-2. Context
-3. Escalation
-4. Community reaction
-5. Hidden truth / insight
-6. Ending twist
+1. Scroll-stopping hook (exact text above)
+2. Setting the scene — who, where, when
+3. The crime / disappearance / mystery unfolds
+4. Investigation — what did authorities find?
+5. The twist or revelation
+6. Personal commentary and emotional analysis
+7. Haunting closing question
 
-Make it feel like a real unexplained internet phenomenon.
+Style: dark, serious, investigative. No humor. No clickbait. Real storytelling.
 """
 
     _client = OpenAI(api_key=OPENAI_API_KEY)
@@ -144,38 +153,39 @@ Make it feel like a real unexplained internet phenomenon.
 # _real_content — full package for the pipeline
 # --------------------------------------------------
 
-_SYSTEM_PROMPT = """You are a professional YouTube viral documentary script writer.
+_SYSTEM_PROMPT = """You are a master True Crime storyteller.
+
+Your style: MrBallen and Rotten Mango. Dark, serious, investigative. No fluff, no humor.
 
 RULES:
-- Do NOT write fictional science stories
-- Base everything on real internet discussion and documented events
-- Make it engaging like a Netflix documentary
-- Add a strong hook in first 5 seconds
-- Add mini hooks every 30–60 seconds
-- Increase curiosity gradually
-- End with an unresolved or shocking question
+- Every script starts with a scroll-stopping hook in the first 10 seconds
+- Add dramatic pauses (…) before revelations
+- Include emotional analysis and personal commentary
+- Add a cliffhanger every 90 seconds
+- Base everything on real documented events — no fiction
+- Length: 10-12 minutes (2200-2600 words)
+- End with a haunting open question
 
 Script structure:
-1. Hook
-2. Context
-3. Escalation
-4. Community reaction
-5. Hidden truth / insight
-6. Ending twist
-
-Make it feel like a real unexplained internet phenomenon."""
+1. Scroll-stopping hook
+2. Setting the scene
+3. The crime / disappearance unfolds
+4. Investigation and evidence
+5. The twist or revelation
+6. Personal commentary
+7. Haunting closing question"""
 
 
 def _real_content(topic: str) -> dict:
-    user_prompt = f"""Use this REAL viral Reddit story as source:
+    user_prompt = f"""Use this TRUE CRIME story as your source:
 
 Title: {topic}
 
 Return a JSON object with EXACTLY these fields:
 {{
-  "title": "Viral YouTube title — max 100 chars. Real hook: name/date/place or shocking claim. High CTR.",
-  "script": "Full 7–9 minute YouTube script (1500–1800 words). Follows the 6-part structure. Mini hooks every ~150 words. Ends with unresolved question or shocking twist.",
-  "description": "YouTube description 150–250 words. Hook in first 2 lines. Story summary. CTA to subscribe and comment. SEO hashtags.",
+  "title": "YouTube title — max 100 chars. Real hook: name/date/place or shocking claim. High CTR. Dark, serious tone.",
+  "script": "Full 10-12 minute True Crime script (2200-2600 words). Follows the 7-part structure. Cliffhanger every 90 seconds. Dramatic pauses (…) before revelations. Personal commentary. Haunting end question.",
+  "description": "YouTube description 150-250 words. Gripping hook in first 2 lines. Story summary. CTA to subscribe and comment. True crime hashtags.",
   "tags": ["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10"]
 }}
 
@@ -201,6 +211,6 @@ Return ONLY valid JSON — no markdown, no code fences, no extra text."""
 
 def generate_full_content(topic: str) -> dict:
     if MOCK_MODE:
-        print(f"[MOCK_MODE] Skipping OpenAI — returning mock content for: {topic}")
+        print(f"[MOCK_MODE] Skipping OpenAI — returning mock True Crime content for: {topic}")
         return _mock_content(topic)
     return _real_content(topic)
