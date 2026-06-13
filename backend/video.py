@@ -40,7 +40,7 @@ def _set_audio(clip, audio):
     return clip.set_audio(audio)
 
 
-W, H = 960, 540
+W, H = 854, 480
 
 
 CLIMAX_KEYWORDS = {
@@ -100,7 +100,7 @@ def detect_music_type(text, idx, n_segments, is_hook, hook_indices,
 
 
 def add_segment_music(video_segment, segment_type, duration):
-    """إضافة موسيقى مناسبة لنوع المقطع مع خفض الصوت"""
+    """إضافة موسيقى مناسبة لنوع المقطع مع خفض الصوت — تدور في حلقة إذا كانت أقصر من المدة"""
     music_file = get_music_for_segment(segment_type)
     music_path = os.path.join(os.path.dirname(__file__), "assets", "music", music_file)
 
@@ -109,8 +109,11 @@ def add_segment_music(video_segment, segment_type, duration):
 
     try:
         music = AudioFileClip(music_path)
-        music = music.subclip(0, min(duration, music.duration))
-        music = music.volumex(0.25)  # 25% من صوت الراوي
+        safe_duration = min(duration, music.duration - 0.1)
+        if safe_duration <= 0:
+            return video_segment
+        music = music.subclip(0, safe_duration)
+        music = music.volumex(0.25)
 
         if video_segment.audio:
             final_audio = CompositeAudioClip([video_segment.audio, music])
@@ -291,115 +294,173 @@ def create_zoom_effect(clip, zoom_factor=1.1, duration=None):
     return clip.fl(make_frame)
 
 
+def _get_audio_duration(path):
+    """يحصل على مدة ملف الصوت بثوانٍ"""
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", path],
+        capture_output=True, text=True
+    )
+    try:
+        return float(result.stdout.strip())
+    except Exception:
+        return 0.0
+
+
+def _ffmpeg_trim_clip(src, dst, duration, w=W, h=H):
+    """يقص مقطع فيديو ويعيد ضبط حجمه بـ ffmpeg — لا يُحمَّل في الذاكرة"""
+    vf = (
+        f"scale={w}:{h}:force_original_aspect_ratio=increase,"
+        f"crop={w}:{h}"
+    )
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", src,
+         "-t", str(duration),
+         "-vf", vf,
+         "-r", "24",
+         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+         "-an",
+         dst],
+        capture_output=True
+    )
+
+
+def _ffmpeg_make_color_clip(dst, duration, w=W, h=H, color="0x0A0A1E"):
+    """ينشئ مقطع ملون ثابت (خلفية بديلة) بـ ffmpeg"""
+    subprocess.run(
+        ["ffmpeg", "-y",
+         "-f", "lavfi", "-i", f"color={color}:size={w}x{h}:rate=24",
+         "-t", str(duration),
+         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+         "-an",
+         dst],
+        capture_output=True
+    )
+
+
 def create_video(audio_path, script, output="video.mp4", story_type="default"):
     """
-    النسخة المطورة: تحترم الـ hooks وتضيف تأثيرات بصرية مختلفة لكل hook
+    إنتاج الفيديو باستخدام ffmpeg streaming — لا يُحمَّل أي فيديو في RAM.
+    كل مقطع يُعالَج ويُحفَظ على القرص ثم يُدمَج عبر concat demuxer.
     """
-    audio = AudioFileClip(audio_path)
-    total = audio.duration
+    total = _get_audio_duration(audio_path)
+    if total <= 0:
+        raise RuntimeError(f"[video] لم يُعثر على مدة الصوت: {audio_path}")
 
-    # استخراج الأجزاء مع تحديد أيها hooks
     segments = extract_segments_with_hooks(script)
     print(f"[video] تم العثور على {len(segments)} مقطع ({sum(1 for _,h in segments if h)} hooks)")
 
-    # جلب فيديوهات خلفية
-    urls = get_stock_video_urls(story_type, n=len(segments) + 3)
+    urls = get_stock_video_urls(story_type, n=min(len(segments) + 3, 10))
+
+    os.makedirs(os.path.dirname(output) if os.path.dirname(output) else ".", exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmp:
-        # تحميل الفيديوهات
+        # تحميل مقاطع Pexels
         video_paths = []
         for u in urls:
             p = download_clip(u, tmp)
             if p:
                 video_paths.append(p)
 
-        # حساب مدة كل مقطع
         duration_per_segment = total / max(len(segments), 1)
-
-        # تحديد مواضع الـ hooks
         hook_indices = [i for i, (_, h) in enumerate(segments) if h]
         n_segments = len(segments)
-        elapsed_time = 0.0
-        scenes = []
+        elapsed = 0.0
+        segment_files = []
 
         for idx, (text, is_hook) in enumerate(segments):
-            seg_dur = min(duration_per_segment, 7.0)
+            seg_dur = min(duration_per_segment, 8.0)
             if is_hook:
-                seg_dur = max(2.5, seg_dur * 0.7)
+                seg_dur = max(2.5, seg_dur * 0.6)
 
-            seg_music_type = detect_music_type(
-                text, idx, n_segments, is_hook, hook_indices,
-                elapsed_time, total,
-            )
+            seg_dur = round(seg_dur, 3)
+            seg_path = os.path.join(tmp, f"seg_{idx:03d}.mp4")
 
-            video_used = False
-            if idx < len(video_paths) and not is_hook:
+            # اختر فيديو Pexels أو بطاقة ملونة
+            pexels_idx = idx % len(video_paths) if video_paths else -1
+            used_video = False
+
+            if pexels_idx >= 0:
                 try:
-                    raw = VideoFileClip(video_paths[idx])
-                    dur = min(seg_dur, raw.duration)
-                    raw = raw.subclip(0, dur)
-
-                    # fit to frame, crop center
-                    scale = max(W / raw.w, H / raw.h) * 1.05
-                    raw = raw.resize(scale)
-                    xc = (raw.w - W) / 2
-                    yc = (raw.h - H) / 2
-                    raw = raw.crop(x1=xc, y1=yc, x2=xc + W, y2=yc + H)
-
-                    raw = add_segment_music(raw, seg_music_type, dur)
-                    scenes.append(raw)
-                    video_used = True
-                    print(f"[video] مقطع {idx+1}: فيديو ✓ | 🎵 {seg_music_type}")
+                    _ffmpeg_trim_clip(video_paths[pexels_idx], seg_path, seg_dur)
+                    if os.path.exists(seg_path) and os.path.getsize(seg_path) > 1000:
+                        used_video = True
+                        print(f"[video] مقطع {idx+1}: فيديو ✓")
                 except Exception as e:
-                    print(f"[video] فشل الفيديو: {e}")
+                    print(f"[video] فشل Pexels {idx}: {e}")
 
-            if not video_used:
-                card = make_gradient_card(text, seg_dur, is_hook=is_hook)
-                card = add_segment_music(card, seg_music_type, seg_dur)
-                scenes.append(card)
-                print(f"[video] مقطع {idx+1}: {'🔥 HOOK' if is_hook else 'بطاقة'} | 🎵 {seg_music_type}")
+            if not used_video:
+                color = "0x640A0A" if is_hook else "0x0A0A1E"
+                _ffmpeg_make_color_clip(seg_path, seg_dur, color=color)
+                print(f"[video] مقطع {idx+1}: {'🔥 HOOK' if is_hook else 'بطاقة'} (لون)")
 
-            elapsed_time += seg_dur
+            if os.path.exists(seg_path):
+                segment_files.append(seg_path)
+            elapsed += seg_dur
 
-        # دمج جميع المشاهد — داخل tmp حتى لا تُحذف ملفات Pexels قبل التصدير
-        if not scenes:
-            scenes.append(ColorClip(size=(W, H), color=(10, 10, 30), duration=total))
+        if not segment_files:
+            raise RuntimeError("[video] لم يتم إنتاج أي مقطع")
 
-        final = concatenate_videoclips(scenes, method="compose")
+        # concat list
+        concat_list = os.path.join(tmp, "concat.txt")
+        with open(concat_list, "w") as f:
+            for sf in segment_files:
+                f.write(f"file '{sf}'\n")
 
-        if final.duration < total:
-            loop = scenes[-1].loop(duration=total - final.duration + 0.1)
-            final = concatenate_videoclips([final, loop], method="compose")
-        elif final.duration > total:
-            final = final.subclip(0, total)
-
-        if final.audio:
-            final = _set_audio(final, CompositeAudioClip([audio, final.audio]))
-        else:
-            final = _set_audio(final, audio)
-
-        tmp_out = output + ".tmp.mp4"
-        final.write_videofile(
-            tmp_out, fps=24, codec="libx264", audio_codec="aac",
-            preset="ultrafast", threads=4, logger=None,
+        # دمج المقاطع بـ concat demuxer (streaming — بدون تحميل في الذاكرة)
+        raw_video = os.path.join(tmp, "raw_video.mp4")
+        subprocess.run(
+            ["ffmpeg", "-y", "-f", "concat", "-safe", "0",
+             "-i", concat_list,
+             "-c", "copy",
+             raw_video],
+            capture_output=True
         )
 
-    # إعادة ترميز بعد إغلاق tmp — tmp_out في مجلد output وليس في tmp
-    result = subprocess.run(
-        ["ffmpeg", "-i", tmp_out, "-movflags", "+faststart", "-c", "copy", output, "-y"],
-        capture_output=True,
-    )
-    if os.path.exists(tmp_out):
-        os.remove(tmp_out)
+        # إضافة الصوت — اختر موسيقى خلفية إذا وُجدت
+        music_dir = os.path.join(os.path.dirname(__file__), "assets", "music")
+        music_file = os.path.join(music_dir, "bgm_calm.mp3")
+        has_music = os.path.exists(music_file)
 
-    if result.returncode != 0:
-        import shutil
-        shutil.move(tmp_out if os.path.exists(tmp_out) else output, output)
+        if has_music:
+            # دمج: راوي (كامل) + موسيقى (25% صوت) + فيديو
+            subprocess.run(
+                ["ffmpeg", "-y",
+                 "-i", raw_video,
+                 "-i", audio_path,
+                 "-stream_loop", "-1", "-i", music_file,
+                 "-filter_complex",
+                 f"[2:a]volume=0.25[music];[1:a][music]amix=inputs=2:duration=first[aout]",
+                 "-map", "0:v",
+                 "-map", "[aout]",
+                 "-t", str(total),
+                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+                 "-c:a", "aac", "-b:a", "128k",
+                 "-movflags", "+faststart",
+                 "-shortest",
+                 output],
+                capture_output=True
+            )
+        else:
+            # بدون موسيقى — صوت الراوي فقط
+            subprocess.run(
+                ["ffmpeg", "-y",
+                 "-i", raw_video,
+                 "-i", audio_path,
+                 "-map", "0:v",
+                 "-map", "1:a",
+                 "-t", str(total),
+                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+                 "-c:a", "aac", "-b:a", "128k",
+                 "-movflags", "+faststart",
+                 "-shortest",
+                 output],
+                capture_output=True
+            )
 
-    hook_count = sum(1 for _, h in segments if h)
+    size_mb = round(os.path.getsize(output) / (1024 * 1024), 1) if os.path.exists(output) else 0
     print(f"\n🎬 [video] تم إنتاج الفيديو → {output}")
-    print(f"   - مدة الفيديو: {total:.1f} ثانية")
-    print(f"   - عدد hooks: {hook_count} | عدد المشاهد: {len(scenes)}")
+    print(f"   - مدة الفيديو: {total:.1f} ثانية | الحجم: {size_mb}MB")
 
     return output
 
