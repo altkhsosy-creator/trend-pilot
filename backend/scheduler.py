@@ -55,6 +55,10 @@ def job():
     print(f"[scheduler] Video generated: {video}")
     send_notification(f"🎬 فيديو اليوم جاهز!\n\nالعنوان: {title}\n📹 رابط المعاينة: http://46.101.250.86:5001")
 
+    # استخراج Shorts من الفيديو الطويل
+    shorts_paths = extract_shorts(video, num_shorts=3, duration=60)
+    print(f"[scheduler] Extracted {len(shorts_paths)} shorts")
+
     # 7. تجميع كل شيء في حزمة محتوى واحدة
     package = build_content_package(
         topic=topic,
