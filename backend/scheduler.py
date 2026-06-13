@@ -10,6 +10,7 @@ from voice import text_to_speech
 from video import create_video
 from package_builder import build_content_package
 from notify import send_notification
+from short_generator import extract_shorts
 
 VIDEOS_DIR = os.path.join(os.path.dirname(__file__), "output", "videos")
 
