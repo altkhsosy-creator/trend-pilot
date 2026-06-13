@@ -78,8 +78,15 @@ def gallery():
     videos = []
     paths = []
     base = os.path.dirname(os.path.abspath(__file__))
-    for folder in [base, os.path.join(base, 'output', 'videos')]:
-        paths.extend(glob.glob(os.path.join(folder, '*.mp4')))
+    search_folders = [
+        base,
+        os.path.join(base, 'output', 'videos'),
+        os.path.join(base, 'output', 'shorts'),
+        '/root/trend-pilot/backend/output/shorts',
+    ]
+    for folder in search_folders:
+        if os.path.isdir(folder):
+            paths.extend(glob.glob(os.path.join(folder, '*.mp4')))
     paths = list(set(paths))
     for p in paths:
         stat = os.stat(p)
@@ -95,7 +102,13 @@ def gallery():
 @app.route('/video_gallery/<filename>')
 def serve_video(filename):
     base = os.path.dirname(os.path.abspath(__file__))
-    for folder in [base, os.path.join(base, 'output', 'videos')]:
+    serve_folders = [
+        base,
+        os.path.join(base, 'output', 'videos'),
+        os.path.join(base, 'output', 'shorts'),
+        '/root/trend-pilot/backend/output/shorts',
+    ]
+    for folder in serve_folders:
         path = os.path.join(folder, filename)
         if os.path.exists(path):
             return send_from_directory(folder, filename)
