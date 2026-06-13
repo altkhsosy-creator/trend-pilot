@@ -338,130 +338,255 @@ def _ffmpeg_make_color_clip(dst, duration, w=W, h=H, color="0x0A0A1E"):
     )
 
 
-def create_video(audio_path, script, output="video.mp4", story_type="default"):
+FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+
+def _esc(text):
+    """تهريب النص لـ ffmpeg drawtext"""
+    return (text
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+            .replace(":", "\\:")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+            .replace("%", "\\%"))
+
+
+def _wrap_text(text, max_chars=52):
+    """تقسيم النص إلى سطرين بحد أقصى max_chars في السطر"""
+    words = text.strip().split()
+    lines, line = [], []
+    for w in words:
+        if len(" ".join(line + [w])) > max_chars:
+            if line:
+                lines.append(" ".join(line))
+            line = [w]
+        else:
+            line.append(w)
+    if line:
+        lines.append(" ".join(line))
+    return lines[:2]
+
+
+def _ffmpeg_make_title_card(dst, title, duration=5, w=W, h=H):
+    """بطاقة عنوان دراماتيكية في بداية الفيديو"""
+    label = _esc("TRUE CRIME")
+    title_lines = _wrap_text(title, max_chars=42)
+    title_text = _esc(title_lines[0])
+    title_text2 = _esc(title_lines[1]) if len(title_lines) > 1 else ""
+
+    drawtext = (
+        f"drawtext=fontfile={FONT_PATH}:text='{label}':"
+        f"fontsize=28:fontcolor=0xFF3333:x=(w-text_w)/2:y=h/2-90:"
+        f"alpha='if(lt(t,0.5),t/0.5,1)',"
+
+        f"drawtext=fontfile={FONT_PATH}:text='{title_text}':"
+        f"fontsize=40:fontcolor=white:x=(w-text_w)/2:y=h/2-40:"
+        f"box=1:boxcolor=black@0.0:alpha='if(lt(t,0.5),t/0.5,1)'"
+    )
+    if title_text2:
+        drawtext += (
+            f",drawtext=fontfile={FONT_PATH}:text='{title_text2}':"
+            f"fontsize=40:fontcolor=white:x=(w-text_w)/2:y=h/2+10:"
+            f"alpha='if(lt(t,0.5),t/0.5,1)'"
+        )
+
+    subprocess.run(
+        ["ffmpeg", "-y",
+         "-f", "lavfi", "-i", f"color=black:size={w}x{h}:rate=24",
+         "-t", str(duration),
+         "-vf", drawtext,
+         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+         "-an", dst],
+        capture_output=True
+    )
+
+
+def _ffmpeg_add_text_overlay(src, dst, text, w=W, h=H):
+    """يضيف نص القصة كـ subtitle في أسفل الفيديو"""
+    lines = _wrap_text(text, max_chars=52)
+    line1 = _esc(lines[0]) if lines else ""
+    line2 = _esc(lines[1]) if len(lines) > 1 else ""
+
+    if not line1:
+        try:
+            import shutil
+            shutil.copy(src, dst)
+        except Exception:
+            pass
+        return
+
+    box = "box=1:boxcolor=black@0.65:boxborderw=12"
+    y1 = "h-100" if line2 else "h-72"
+    y2 = "h-60"
+
+    drawtext = (
+        f"drawtext=fontfile={FONT_PATH}:text='{line1}':"
+        f"fontsize=34:fontcolor=white:x=(w-text_w)/2:y={y1}:{box}"
+    )
+    if line2:
+        drawtext += (
+            f",drawtext=fontfile={FONT_PATH}:text='{line2}':"
+            f"fontsize=34:fontcolor=white:x=(w-text_w)/2:y={y2}:{box}"
+        )
+
+    result = subprocess.run(
+        ["ffmpeg", "-y", "-i", src,
+         "-vf", drawtext,
+         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+         "-an", dst],
+        capture_output=True
+    )
+    if result.returncode != 0 or not os.path.exists(dst):
+        import shutil
+        shutil.copy(src, dst)
+
+
+def _segment_pexels_query(text, story_type="default"):
+    """يستخرج كلمات مفتاحية من نص المقطع لجلب فيديو Pexels مناسب"""
+    keywords = {
+        "investigation": "detective investigation crime scene",
+        "killer": "dark alley danger shadow night",
+        "murder": "crime scene police investigation dark",
+        "cipher": "code puzzle mystery dark",
+        "police": "police car lights crime investigation",
+        "evidence": "forensic laboratory evidence crime",
+        "body": "crime scene investigation dark forest",
+        "disappear": "fog mystery abandoned dark",
+        "confession": "dark room shadow dramatic",
+        "victim": "empty street night dark danger",
+        "suspect": "shadow silhouette mystery dark",
+        "secret": "dark corridor mystery shadow",
+        "fear": "dark stormy night suspense",
+        "unknown": "fog dark mystery abandoned",
+    }
+    text_lower = text.lower()
+    for kw, query in keywords.items():
+        if kw in text_lower:
+            return query
+    return "dark mystery investigation crime"
+
+
+def create_video(audio_path, script, output="video.mp4", story_type="default", title=""):
     """
-    إنتاج الفيديو باستخدام ffmpeg streaming — لا يُحمَّل أي فيديو في RAM.
-    كل مقطع يُعالَج ويُحفَظ على القرص ثم يُدمَج عبر concat demuxer.
+    إنتاج الفيديو باستخدام ffmpeg streaming مع:
+    - Title Card دراماتيكي في البداية
+    - Text Overlay على كل مقطع
+    - Pexels queries مخصصة لكل مقطع
     """
     total = _get_audio_duration(audio_path)
     if total <= 0:
         raise RuntimeError(f"[video] لم يُعثر على مدة الصوت: {audio_path}")
 
     segments = extract_segments_with_hooks(script)
-    print(f"[video] تم العثور على {len(segments)} مقطع ({sum(1 for _,h in segments if h)} hooks)")
-
-    urls = get_stock_video_urls(story_type, n=min(len(segments) + 3, 10))
+    n_hooks = sum(1 for _, h in segments if h)
+    print(f"[video] {len(segments)} مقطع ({n_hooks} hooks) | {total:.1f}s")
 
     os.makedirs(os.path.dirname(output) if os.path.dirname(output) else ".", exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmp:
-        # تحميل مقاطع Pexels
-        video_paths = []
-        for u in urls:
-            p = download_clip(u, tmp)
-            if p:
-                video_paths.append(p)
+        segment_files = []
+
+        # ── 0. Title Card (5 ثوانٍ) ──────────────────────────────
+        if title:
+            title_path = os.path.join(tmp, "seg_title.mp4")
+            _ffmpeg_make_title_card(title_path, title, duration=5)
+            if os.path.exists(title_path) and os.path.getsize(title_path) > 500:
+                segment_files.append(title_path)
+                print("[video] ✅ Title Card أُضيف")
 
         duration_per_segment = total / max(len(segments), 1)
-        hook_indices = [i for i, (_, h) in enumerate(segments) if h]
-        n_segments = len(segments)
-        elapsed = 0.0
-        segment_files = []
 
         for idx, (text, is_hook) in enumerate(segments):
             seg_dur = min(duration_per_segment, 8.0)
             if is_hook:
                 seg_dur = max(2.5, seg_dur * 0.6)
-
             seg_dur = round(seg_dur, 3)
-            seg_path = os.path.join(tmp, f"seg_{idx:03d}.mp4")
 
-            # اختر فيديو Pexels أو بطاقة ملونة
-            pexels_idx = idx % len(video_paths) if video_paths else -1
+            # جلب فيديو Pexels مخصص لمحتوى المقطع
+            query = _segment_pexels_query(text, story_type)
+            urls = get_stock_video_urls(query, n=2)
+
+            raw_path = os.path.join(tmp, f"raw_{idx:03d}.mp4")
+            seg_path = os.path.join(tmp, f"seg_{idx:03d}.mp4")
             used_video = False
 
-            if pexels_idx >= 0:
-                try:
-                    _ffmpeg_trim_clip(video_paths[pexels_idx], seg_path, seg_dur)
-                    if os.path.exists(seg_path) and os.path.getsize(seg_path) > 1000:
+            for url in urls:
+                clip = download_clip(url, tmp)
+                if clip:
+                    _ffmpeg_trim_clip(clip, raw_path, seg_dur)
+                    if os.path.exists(raw_path) and os.path.getsize(raw_path) > 1000:
                         used_video = True
-                        print(f"[video] مقطع {idx+1}: فيديو ✓")
-                except Exception as e:
-                    print(f"[video] فشل Pexels {idx}: {e}")
+                        break
 
             if not used_video:
                 color = "0x640A0A" if is_hook else "0x0A0A1E"
-                _ffmpeg_make_color_clip(seg_path, seg_dur, color=color)
-                print(f"[video] مقطع {idx+1}: {'🔥 HOOK' if is_hook else 'بطاقة'} (لون)")
+                _ffmpeg_make_color_clip(raw_path, seg_dur, color=color)
 
-            if os.path.exists(seg_path):
-                segment_files.append(seg_path)
-            elapsed += seg_dur
+            # إضافة Text Overlay
+            overlay_text = text[:120].strip()
+            _ffmpeg_add_text_overlay(raw_path, seg_path, overlay_text)
+
+            final_seg = seg_path if (os.path.exists(seg_path) and os.path.getsize(seg_path) > 500) else raw_path
+            if os.path.exists(final_seg):
+                segment_files.append(final_seg)
+                icon = "🎬" if used_video else ("🔥" if is_hook else "🃏")
+                print(f"[video] مقطع {idx+1}: {icon} + text overlay")
 
         if not segment_files:
             raise RuntimeError("[video] لم يتم إنتاج أي مقطع")
 
-        # concat list
+        # دمج بـ concat demuxer
         concat_list = os.path.join(tmp, "concat.txt")
         with open(concat_list, "w") as f:
             for sf in segment_files:
                 f.write(f"file '{sf}'\n")
 
-        # دمج المقاطع بـ concat demuxer (streaming — بدون تحميل في الذاكرة)
         raw_video = os.path.join(tmp, "raw_video.mp4")
         subprocess.run(
             ["ffmpeg", "-y", "-f", "concat", "-safe", "0",
-             "-i", concat_list,
-             "-c", "copy",
-             raw_video],
+             "-i", concat_list, "-c", "copy", raw_video],
             capture_output=True
         )
 
-        # إضافة الصوت — اختر موسيقى خلفية إذا وُجدت
+        # إضافة الصوت + موسيقى خلفية
         music_dir = os.path.join(os.path.dirname(__file__), "assets", "music")
-        music_file = os.path.join(music_dir, "bgm_calm.mp3")
+        music_file = os.path.join(music_dir, "bgm_suspense.mp3")
+        if not os.path.exists(music_file):
+            music_file = os.path.join(music_dir, "bgm_calm.mp3")
         has_music = os.path.exists(music_file)
 
         if has_music:
-            # دمج: راوي (كامل) + موسيقى (25% صوت) + فيديو
             subprocess.run(
                 ["ffmpeg", "-y",
                  "-i", raw_video,
                  "-i", audio_path,
                  "-stream_loop", "-1", "-i", music_file,
                  "-filter_complex",
-                 f"[2:a]volume=0.25[music];[1:a][music]amix=inputs=2:duration=first[aout]",
-                 "-map", "0:v",
-                 "-map", "[aout]",
-                 "-t", str(total),
-                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+                 "[2:a]volume=0.20[music];[1:a][music]amix=inputs=2:duration=first[aout]",
+                 "-map", "0:v", "-map", "[aout]",
+                 "-t", str(total + 5),
+                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
                  "-c:a", "aac", "-b:a", "128k",
-                 "-movflags", "+faststart",
-                 "-shortest",
+                 "-movflags", "+faststart", "-shortest",
                  output],
                 capture_output=True
             )
         else:
-            # بدون موسيقى — صوت الراوي فقط
             subprocess.run(
                 ["ffmpeg", "-y",
-                 "-i", raw_video,
-                 "-i", audio_path,
-                 "-map", "0:v",
-                 "-map", "1:a",
-                 "-t", str(total),
-                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+                 "-i", raw_video, "-i", audio_path,
+                 "-map", "0:v", "-map", "1:a",
+                 "-t", str(total + 5),
+                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
                  "-c:a", "aac", "-b:a", "128k",
-                 "-movflags", "+faststart",
-                 "-shortest",
+                 "-movflags", "+faststart", "-shortest",
                  output],
                 capture_output=True
             )
 
     size_mb = round(os.path.getsize(output) / (1024 * 1024), 1) if os.path.exists(output) else 0
-    print(f"\n🎬 [video] تم إنتاج الفيديو → {output}")
-    print(f"   - مدة الفيديو: {total:.1f} ثانية | الحجم: {size_mb}MB")
-
+    print(f"\n🎬 [video] → {output} | {total:.0f}s | {size_mb}MB")
     return output
 
 
