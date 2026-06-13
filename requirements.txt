@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+flask
+requests
+openai
+python-dotenv
+apscheduler
+gtts
+moviepy==1.0.3
+pillow
+numpy
