@@ -43,6 +43,62 @@ def _set_audio(clip, audio):
 W, H = 960, 540
 
 
+CLIMAX_KEYWORDS = {
+    "died", "dead", "killed", "murder", "arrested", "revealed", "discovered",
+    "confession", "truth", "finally", "shocking", "unbelievable", "exposed",
+    "caught", "found", "guilty", "sentenced", "disappeared", "missing",
+    "impossible", "never", "forever", "destroyed", "collapsed", "ended",
+}
+
+EMOTIONAL_KEYWORDS = {
+    "love", "loss", "grief", "cried", "tears", "family", "mother", "father",
+    "child", "forgive", "hope", "lonely", "alone", "heart", "beautiful",
+    "sacrifice", "brave", "kind", "grateful", "remember", "miss",
+}
+
+CLOSING_THRESHOLD = 15.0  # آخر 15 ثانية = خاتمة
+
+
+def detect_music_type(text, idx, n_segments, is_hook, hook_indices,
+                      elapsed_time, total_duration):
+    """
+    يحدد نوع الموسيقى المناسب لكل مقطع بناءً على:
+    - موضع المقطع في القصة (%)
+    - نوعه (hook / عادي)
+    - الكلمات المفتاحية في النص
+    - الوقت المتبقي للنهاية
+    """
+    n_hooks = len(hook_indices)
+    remaining = total_duration - elapsed_time
+    story_progress = elapsed_time / max(total_duration, 1)
+
+    # خاتمة: آخر 15 ثانية
+    if remaining <= CLOSING_THRESHOLD and not is_hook:
+        return "closing"
+
+    # hooks
+    if is_hook:
+        hook_pos = hook_indices.index(idx)
+        if n_hooks == 1 or hook_pos == 0:
+            return "hook_start"
+        elif hook_pos == n_hooks - 1:
+            return "hook_end"
+        else:
+            return "hook_middle"
+
+    # كشف ذروة القصة (70-85% من مدة الفيديو أو كلمات مفتاحية)
+    words = set(text.lower().split())
+    if CLIMAX_KEYWORDS & words or 0.70 <= story_progress <= 0.88:
+        return "story_climax"
+
+    # كشف اللحظات العاطفية
+    if EMOTIONAL_KEYWORDS & words:
+        return "emotional"
+
+    # سرد عادي
+    return "story_normal"
+
+
 def add_segment_music(video_segment, segment_type, duration):
     """إضافة موسيقى مناسبة لنوع المقطع مع خفض الصوت"""
     music_file = get_music_for_segment(segment_type)
@@ -257,9 +313,10 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
         # حساب مدة كل مقطع
         duration_per_segment = total / max(len(segments), 1)
 
-        # تحديد مواضع الـ hooks لتحديد نوع كل منها
+        # تحديد مواضع الـ hooks
         hook_indices = [i for i, (_, h) in enumerate(segments) if h]
-        n_hooks = len(hook_indices)
+        n_segments = len(segments)
+        elapsed_time = 0.0
 
         for idx, (text, is_hook) in enumerate(segments):
             # مدة هذا المقطع
@@ -267,19 +324,11 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
             if is_hook:
                 seg_dur = max(2.5, seg_dur * 0.7)
 
-            # تحديد نوع المقطع للموسيقى
-            if is_hook:
-                hook_pos = hook_indices.index(idx)
-                if n_hooks == 1 or hook_pos == 0:
-                    seg_music_type = "hook_start"
-                elif hook_pos == n_hooks - 1:
-                    seg_music_type = "hook_end"
-                else:
-                    seg_music_type = "hook_middle"
-            elif idx == len(segments) - 1:
-                seg_music_type = "closing"
-            else:
-                seg_music_type = "story_normal"
+            # تحديد نوع الموسيقى بالنظام الذكي
+            seg_music_type = detect_music_type(
+                text, idx, n_segments, is_hook, hook_indices,
+                elapsed_time, total,
+            )
 
             # محاولة استخدام فيديو حقيقي
             video_used = False
@@ -300,7 +349,7 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
                     raw = add_segment_music(raw, seg_music_type, dur)
                     scenes.append(raw)
                     video_used = True
-                    print(f"[video] مقطع {idx+1}: فيديو ✓ | موسيقى: {seg_music_type}")
+                    print(f"[video] مقطع {idx+1}: فيديو ✓ | 🎵 {seg_music_type}")
                 except Exception as e:
                     print(f"[video] فشل الفيديو: {e}")
 
@@ -308,7 +357,9 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
                 card = make_gradient_card(text, seg_dur, is_hook=is_hook)
                 card = add_segment_music(card, seg_music_type, seg_dur)
                 scenes.append(card)
-                print(f"[video] مقطع {idx+1}: {'🔥 HOOK' if is_hook else 'بطاقة عادية'} | موسيقى: {seg_music_type}")
+                print(f"[video] مقطع {idx+1}: {'🔥 HOOK' if is_hook else 'بطاقة'} | 🎵 {seg_music_type}")
+
+            elapsed_time += seg_dur
 
     # دمج جميع المشاهد
     if not scenes:
