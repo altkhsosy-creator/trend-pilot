@@ -3,6 +3,14 @@ echo "=========================================" >> /root/deploy.log
 echo "Deployment started at $(date)" >> /root/deploy.log
 
 cd /root/trend-pilot
+
+# إلغاء أي تغييرات محلية (تحل مشكلة الملفات القديمة)
+git reset --hard HEAD
+
+# حذف الملفات والمجلدات غير المتعقبة
+git clean -fd
+
+# سحب التحديثات
 git pull origin main
 
 pkill -f "scheduler.py"
