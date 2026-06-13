@@ -14,13 +14,15 @@ if not hasattr(PIL.Image, "ANTIALIAS"):
 try:
     from moviepy.editor import (
         VideoFileClip, ColorClip, TextClip, CompositeVideoClip,
-        AudioFileClip, concatenate_videoclips, ImageClip,
+        AudioFileClip, CompositeAudioClip, concatenate_videoclips, ImageClip,
     )
 except ImportError:
     from moviepy import (
         VideoFileClip, ColorClip, TextClip, CompositeVideoClip,
-        AudioFileClip, concatenate_videoclips, ImageClip,
+        AudioFileClip, CompositeAudioClip, concatenate_videoclips, ImageClip,
     )
+
+from assets.music import get_music_for_segment
 import numpy as np
 
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
@@ -39,6 +41,29 @@ def _set_audio(clip, audio):
 
 
 W, H = 960, 540
+
+
+def add_segment_music(video_segment, segment_type, duration):
+    """إضافة موسيقى مناسبة لنوع المقطع مع خفض الصوت"""
+    music_file = get_music_for_segment(segment_type)
+    music_path = os.path.join(os.path.dirname(__file__), "assets", "music", music_file)
+
+    if not os.path.exists(music_path):
+        return video_segment
+
+    try:
+        music = AudioFileClip(music_path)
+        music = music.subclip(0, min(duration, music.duration))
+        music = music.volumex(0.25)  # 25% من صوت الراوي
+
+        if video_segment.audio:
+            final_audio = CompositeAudioClip([video_segment.audio, music])
+            return _set_audio(video_segment, final_audio)
+        else:
+            return _set_audio(video_segment, music)
+    except Exception as e:
+        print(f"[music] فشل إضافة الموسيقى ({segment_type}): {e}")
+        return video_segment
 
 
 def get_stock_video_urls(query="motivation business success", n=8):
@@ -232,12 +257,29 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
         # حساب مدة كل مقطع
         duration_per_segment = total / max(len(segments), 1)
 
+        # تحديد مواضع الـ hooks لتحديد نوع كل منها
+        hook_indices = [i for i, (_, h) in enumerate(segments) if h]
+        n_hooks = len(hook_indices)
+
         for idx, (text, is_hook) in enumerate(segments):
             # مدة هذا المقطع
             seg_dur = min(duration_per_segment, 7.0)
             if is_hook:
-                # الـ hooks أقصر بـ 30% لزيادة الإيقاع
                 seg_dur = max(2.5, seg_dur * 0.7)
+
+            # تحديد نوع المقطع للموسيقى
+            if is_hook:
+                hook_pos = hook_indices.index(idx)
+                if n_hooks == 1 or hook_pos == 0:
+                    seg_music_type = "hook_start"
+                elif hook_pos == n_hooks - 1:
+                    seg_music_type = "hook_end"
+                else:
+                    seg_music_type = "hook_middle"
+            elif idx == len(segments) - 1:
+                seg_music_type = "closing"
+            else:
+                seg_music_type = "story_normal"
 
             # محاولة استخدام فيديو حقيقي
             video_used = False
@@ -255,17 +297,18 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
                     yc = (raw.h - H) / 2
                     raw = raw.crop(x1=xc, y1=yc, x2=xc + W, y2=yc + H)
 
+                    raw = add_segment_music(raw, seg_music_type, dur)
                     scenes.append(raw)
                     video_used = True
-                    print(f"[video] مقطع {idx+1}: فيديو ✓")
+                    print(f"[video] مقطع {idx+1}: فيديو ✓ | موسيقى: {seg_music_type}")
                 except Exception as e:
                     print(f"[video] فشل الفيديو: {e}")
 
             if not video_used:
-                # استخدام بطاقة نصية (مع تأثير خاص إذا كان hook)
                 card = make_gradient_card(text, seg_dur, is_hook=is_hook)
+                card = add_segment_music(card, seg_music_type, seg_dur)
                 scenes.append(card)
-                print(f"[video] مقطع {idx+1}: {'🔥 HOOK' if is_hook else 'بطاقة عادية'}")
+                print(f"[video] مقطع {idx+1}: {'🔥 HOOK' if is_hook else 'بطاقة عادية'} | موسيقى: {seg_music_type}")
 
     # دمج جميع المشاهد
     if not scenes:
@@ -280,7 +323,11 @@ def create_video(audio_path, script, output="video.mp4", story_type="default"):
     elif final.duration > total:
         final = final.subclip(0, total)
 
-    final = _set_audio(final, audio)
+    # خلط صوت الراوي مع الموسيقى الخلفية (إن وُجدت)
+    if final.audio:
+        final = _set_audio(final, CompositeAudioClip([audio, final.audio]))
+    else:
+        final = _set_audio(final, audio)
 
     # تصدير الفيديو
     tmp_out = output + ".tmp.mp4"
