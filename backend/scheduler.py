@@ -11,7 +11,8 @@ from video import create_video
 from package_builder import build_content_package
 from notify import send_notification
 from short_generator import extract_shorts
-from youtube_upload import upload_video, upload_short, generate_description
+from youtube_upload import upload_video, upload_short, generate_description, set_thumbnail
+from thumbnail import create_thumbnail
 
 VIDEOS_DIR = os.path.join(os.path.dirname(__file__), "output", "videos")
 
@@ -81,7 +82,18 @@ def job():
         print(f"[scheduler] Archived video → {archived_video}")
     package["archived_video"] = f"video_{timestamp}.mp4"
 
-    # 9. رفع على YouTube (إذا كانت credentials موجودة)
+    # 9. توليد Thumbnail احترافي
+    print("[scheduler] Generating thumbnail...")
+    thumbnail_path = None
+    try:
+        hook_line = script.split("\n")[0][:80].strip()
+        thumbnail_path = create_thumbnail(title, subtitle=hook_line)
+        package["thumbnail_path"] = thumbnail_path
+        print(f"[scheduler] ✅ Thumbnail: {thumbnail_path}")
+    except Exception as e:
+        print(f"[scheduler] ⚠️ Thumbnail failed: {e}")
+
+    # 10. رفع على YouTube (إذا كانت credentials موجودة)
     yt_video_id = None
     yt_short_ids = []
     try:
@@ -95,6 +107,10 @@ def job():
         )
         package["youtube_url"] = f"https://www.youtube.com/watch?v={yt_video_id}"
         print(f"[scheduler] ✅ Main video uploaded: {package['youtube_url']}")
+
+        # رفع الـ Thumbnail
+        if thumbnail_path and yt_video_id:
+            set_thumbnail(yt_video_id, thumbnail_path)
 
         # رفع الـ Shorts
         for i, short_path in enumerate(shorts_paths):

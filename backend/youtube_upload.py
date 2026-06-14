@@ -121,6 +121,22 @@ def upload_short(
     )
 
 
+def set_thumbnail(video_id: str, thumbnail_path: str) -> bool:
+    """يرفع thumbnail مخصص للفيديو على YouTube"""
+    if not os.path.exists(thumbnail_path):
+        print(f"[youtube] Thumbnail not found: {thumbnail_path}")
+        return False
+    try:
+        youtube = _get_youtube_client()
+        media = MediaFileUpload(thumbnail_path, mimetype="image/jpeg")
+        youtube.thumbnails().set(videoId=video_id, media_body=media).execute()
+        print(f"[youtube] ✅ Thumbnail uploaded for video {video_id}")
+        return True
+    except Exception as e:
+        print(f"[youtube] ❌ Thumbnail upload failed: {e}")
+        return False
+
+
 def generate_description(title: str, script: str, tags: list[str]) -> str:
     """يولّد وصفاً احترافياً للفيديو"""
     hook = script[:300].strip()
