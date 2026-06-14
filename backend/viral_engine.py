@@ -4,11 +4,11 @@ from config import MOCK_MODE
 import os
 
 # -------------------------------------------------------
-# Reddit OAuth credentials (optional — enables live feed)
+# API credentials
 # -------------------------------------------------------
 REDDIT_CLIENT_ID     = os.getenv("REDDIT_CLIENT_ID", "")
 REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET", "")
-REDDIT_USERNAME      = os.getenv("REDDIT_USERNAME", "")
+NEWS_API_KEY          = os.getenv("NEWS_API_KEY", "")
 
 # -------------------------------------------------------
 # 30+ True Crime & Unsolved Mysteries fallback stories
@@ -103,7 +103,53 @@ def _fetch_oauth(subreddit: str, token: str) -> list[dict]:
 
 
 # -------------------------------------------------------
-# Fetch — tries OAuth → fallback to rotating mock list
+# NewsAPI — True Crime أخبار حقيقية يومية
+# -------------------------------------------------------
+def _fetch_from_newsapi() -> list[dict]:
+    if not NEWS_API_KEY:
+        return []
+    queries = [
+        "true crime murder unsolved",
+        "cold case solved killer arrested",
+        "serial killer mystery investigation",
+        "murder mystery solved detective",
+    ]
+    stories = []
+    seen_titles = set()
+    for q in queries:
+        try:
+            url = "https://newsapi.org/v2/everything"
+            params = {
+                "q": q,
+                "language": "en",
+                "sortBy": "popularity",
+                "pageSize": 10,
+                "apiKey": NEWS_API_KEY,
+            }
+            r = requests.get(url, params=params, timeout=10)
+            r.raise_for_status()
+            for article in r.json().get("articles", []):
+                title = article.get("title", "").strip()
+                if not title or title in seen_titles:
+                    continue
+                if len(title) < 20:
+                    continue
+                seen_titles.add(title)
+                stories.append({
+                    "title": title,
+                    "score": 50000 + random.randint(0, 50000),
+                    "comments": 5000 + random.randint(0, 10000),
+                    "subreddit": "NewsAPI",
+                    "url": article.get("url", ""),
+                })
+        except Exception as e:
+            print(f"[viral_engine] NewsAPI query '{q}' failed: {e}")
+    print(f"[viral_engine] NewsAPI returned {len(stories)} stories")
+    return stories
+
+
+# -------------------------------------------------------
+# Browser UA fallback for Reddit
 # -------------------------------------------------------
 def _fetch_with_browser_ua(subreddit: str) -> list[dict]:
     headers = {
@@ -141,31 +187,37 @@ def fetch_stories() -> list[dict]:
         print("[MOCK_MODE] Returning mock True Crime stories")
         return _MOCK_STORIES
 
-    # محاولة 1: Reddit OAuth (إذا كانت البيانات متوفرة)
+    # محاولة 1: NewsAPI (مصدر رئيسي — أخبار حقيقية يومية)
+    if NEWS_API_KEY:
+        stories = _fetch_from_newsapi()
+        if stories:
+            print(f"[viral_engine] ✅ NewsAPI: {len(stories)} stories fetched")
+            return stories
+        print("[viral_engine] NewsAPI returned empty — falling back")
+
+    # محاولة 2: Reddit OAuth
     token = _get_reddit_oauth_token()
     if token:
-        print("[viral_engine] Using Reddit OAuth API")
+        print("[viral_engine] Trying Reddit OAuth...")
         all_stories = []
         for sub in _SUBREDDITS:
             all_stories.extend(_fetch_oauth(sub, token))
         if all_stories:
             return all_stories
-        print("[viral_engine] OAuth returned empty — falling back")
 
-    # محاولة 2: Browser User-Agent
-    print("[viral_engine] Trying browser User-Agent...")
+    # محاولة 3: Reddit Browser UA
+    print("[viral_engine] Trying Reddit browser UA...")
     all_stories = []
     for sub in _SUBREDDITS:
         stories = _fetch_with_browser_ua(sub)
         all_stories.extend(stories)
         if stories:
-            break  # نجح واحد يكفي
-
+            break
     if all_stories:
         return all_stories
 
-    # محاولة 3: قائمة احتياطية متنوعة (30+ قصة)
-    print("[viral_engine] All fetches failed — using rotating fallback library")
+    # محاولة 4: قائمة احتياطية (30+ قصة تدور عشوائياً)
+    print("[viral_engine] All sources failed — using rotating fallback library")
     shuffled = _MOCK_STORIES.copy()
     random.shuffle(shuffled)
     return shuffled
