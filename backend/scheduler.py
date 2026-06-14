@@ -11,6 +11,7 @@ from video import create_video
 from package_builder import build_content_package
 from notify import send_notification
 from short_generator import extract_shorts
+from youtube_upload import upload_video, upload_short, generate_description
 
 VIDEOS_DIR = os.path.join(os.path.dirname(__file__), "output", "videos")
 
@@ -60,11 +61,12 @@ def job():
     print(f"[scheduler] Extracted {len(shorts_paths)} shorts")
 
     # 7. تجميع كل شيء في حزمة محتوى واحدة
+    yt_description = generate_description(title, script, tags)
     package = build_content_package(
         topic=topic,
         title=title,
         script=script,
-        description=description,
+        description=yt_description,
         tags=tags,
         audio_path=audio,
         video_path=video,
@@ -79,25 +81,53 @@ def job():
         print(f"[scheduler] Archived video → {archived_video}")
     package["archived_video"] = f"video_{timestamp}.mp4"
 
-    # نسخ Shorts إلى مجلد النشر
-    shorts_dir = "/root/trend-pilot/backend/output/shorts"
-    os.makedirs(shorts_dir, exist_ok=True)
+    # 9. رفع على YouTube (إذا كانت credentials موجودة)
+    yt_video_id = None
+    yt_short_ids = []
+    try:
+        print("[scheduler] Uploading main video to YouTube...")
+        yt_video_id = upload_video(
+            video_path=video,
+            title=title,
+            description=yt_description,
+            tags=tags,
+            privacy="public",
+        )
+        package["youtube_url"] = f"https://www.youtube.com/watch?v={yt_video_id}"
+        print(f"[scheduler] ✅ Main video uploaded: {package['youtube_url']}")
 
-    # هذا افتراض أن لديك قائمة shorts_paths
-    # إذا لم تكن موجودة، سنضيفها لاحقاً
-    if 'shorts_paths' in dir() and shorts_paths:
+        # رفع الـ Shorts
         for i, short_path in enumerate(shorts_paths):
             if os.path.exists(short_path):
-                short_dest = os.path.join(shorts_dir, f"short_{i+1}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
-                shutil.copy(short_path, short_dest)
-                print(f"[scheduler] Copied short to: {short_dest}")
+                short_labels = ["Hook", "Plot Twist", "Climax"]
+                label = short_labels[i] if i < len(short_labels) else f"Part {i+1}"
+                short_title = f"{title[:70]} — {label}"
+                sid = upload_short(
+                    video_path=short_path,
+                    title=short_title,
+                    description=yt_description,
+                    tags=tags,
+                )
+                yt_short_ids.append(sid)
+                print(f"[scheduler] ✅ Short {i+1} uploaded: https://youtube.com/shorts/{sid}")
+
+    except ValueError as e:
+        print(f"[scheduler] ⚠️ YouTube upload skipped: {e}")
+    except Exception as e:
+        print(f"[scheduler] ❌ YouTube upload failed: {e}")
+
+    # 10. إشعار Telegram
+    yt_link = package.get("youtube_url", "لم يُرفع بعد")
+    shorts_count = len(yt_short_ids)
+    send_notification(
+        f"✅ فيديو اليوم جاهز!\n\n"
+        f"📹 {title[:60]}\n\n"
+        f"🔗 YouTube: {yt_link}\n"
+        f"✂️ Shorts: {shorts_count} مقاطع"
+    )
 
     _latest_package = package
-    print("[scheduler] Daily job completed successfully!")
-
-    # 9. إرسال إشعار (يمكن تفعيل Telegram لاحقاً)
-    send_notification(f"✅ Daily Content Package Ready!\n📹 {title[:50]}...")
-
+    print("[scheduler] ✅ Daily job completed!")
     return package
 
 
