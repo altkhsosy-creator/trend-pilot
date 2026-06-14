@@ -105,14 +105,37 @@ def _fetch_oauth(subreddit: str, token: str) -> list[dict]:
 # -------------------------------------------------------
 # NewsAPI — True Crime أخبار حقيقية يومية
 # -------------------------------------------------------
+_TC_REQUIRED = [
+    "murder", "killer", "killed", "victim", "crime", "unsolved",
+    "cold case", "missing", "disappeared", "suspect", "arrested",
+    "convicted", "serial killer", "body found", "mystery", "evidence",
+    "detective", "investigation", "homicide", "stabbed", "shot dead",
+    "execution", "strangled", "poisoned", "kidnapped", "abducted",
+    "zodiac", "btk", "dahmer", "bundy", "manson", "ripper",
+]
+_TC_BANNED = [
+    "netflix series", "amazon prime", "streaming", "hbo show",
+    "season 2", "renewed", "canceled", "trailer", "review:", "stream it",
+    "beach read", "best shows", "editors share", "prestige period",
+    "successor with upcoming", "hotel del luna",
+]
+
+
+def _is_true_crime(title: str) -> bool:
+    t = title.lower()
+    if any(bad in t for bad in _TC_BANNED):
+        return False
+    return any(kw in t for kw in _TC_REQUIRED)
+
+
 def _fetch_from_newsapi() -> list[dict]:
     if not NEWS_API_KEY:
         return []
     queries = [
-        "true crime murder unsolved",
-        "cold case solved killer arrested",
-        "serial killer mystery investigation",
-        "murder mystery solved detective",
+        "murder unsolved killer arrested",
+        "cold case solved serial killer",
+        "body found investigation homicide",
+        "missing person suspect convicted",
     ]
     stories = []
     seen_titles = set()
@@ -123,16 +146,16 @@ def _fetch_from_newsapi() -> list[dict]:
                 "q": q,
                 "language": "en",
                 "sortBy": "popularity",
-                "pageSize": 10,
+                "pageSize": 20,
                 "apiKey": NEWS_API_KEY,
             }
             r = requests.get(url, params=params, timeout=10)
             r.raise_for_status()
             for article in r.json().get("articles", []):
                 title = article.get("title", "").strip()
-                if not title or title in seen_titles:
+                if not title or title in seen_titles or len(title) < 25:
                     continue
-                if len(title) < 20:
+                if not _is_true_crime(title):
                     continue
                 seen_titles.add(title)
                 stories.append({
@@ -144,7 +167,7 @@ def _fetch_from_newsapi() -> list[dict]:
                 })
         except Exception as e:
             print(f"[viral_engine] NewsAPI query '{q}' failed: {e}")
-    print(f"[viral_engine] NewsAPI returned {len(stories)} stories")
+    print(f"[viral_engine] NewsAPI returned {len(stories)} True Crime stories")
     return stories
 
 
