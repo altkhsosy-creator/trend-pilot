@@ -1,0 +1,73 @@
+# =============================================================
+#   TrendPilot — ملف متغيرات البيئة (API Keys)
+#   انسخ هذا الملف وأعد تسميته إلى .env
+#   ثم استبدل كل قيمة YOUR_... بمفتاحك الحقيقي
+# =============================================================
+
+
+# ──────────────────────────────────────────
+# 1. OpenAI — كتابة السكريبت بأسلوب MrBallen
+#    الموقع: https://platform.openai.com/api-keys
+# ──────────────────────────────────────────
+OPENAI_API_KEY=YOUR_OPENAI_API_KEY
+
+
+# ──────────────────────────────────────────
+# 2. Pexels — مقاطع الفيديو للخلفية
+#    الموقع: https://www.pexels.com/api/
+# ──────────────────────────────────────────
+PEXELS_API_KEY=YOUR_PEXELS_API_KEY
+
+
+# ──────────────────────────────────────────
+# 3. NewsAPI — أخبار الجرائم الحقيقية
+#    الموقع: https://newsapi.org/account
+# ──────────────────────────────────────────
+NEWS_API_KEY=YOUR_NEWS_API_KEY
+
+
+# ──────────────────────────────────────────
+# 4. Google Gemini — بديل AI (اختياري)
+#    الموقع: https://aistudio.google.com/app/apikey
+# ──────────────────────────────────────────
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
+
+
+# ──────────────────────────────────────────
+# 5. Telegram Bot — إشعارات الموافقة والنشر
+#    كيفية الحصول:
+#    a) افتح Telegram وابحث عن @BotFather
+#    b) أرسل /newbot واتبع الخطوات
+#    c) احصل على TOKEN
+#    d) ابحث عن @userinfobot لمعرفة CHAT_ID الخاص بك
+# ──────────────────────────────────────────
+TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID=YOUR_TELEGRAM_CHAT_ID
+
+
+# ──────────────────────────────────────────
+# 6. YouTube — رفع الفيديوهات تلقائياً
+#    كيفية الحصول:
+#    a) اذهب إلى: https://console.cloud.google.com
+#    b) أنشئ مشروعاً جديداً
+#    c) فعّل YouTube Data API v3
+#    d) أنشئ OAuth 2.0 credentials
+#    e) الـ REFRESH_TOKEN موجود لديك بالفعل من الإعداد السابق
+# ──────────────────────────────────────────
+YOUTUBE_CLIENT_ID=YOUR_YOUTUBE_CLIENT_ID
+YOUTUBE_CLIENT_SECRET=YOUR_YOUTUBE_CLIENT_SECRET
+YOUTUBE_REFRESH_TOKEN=YOUR_YOUTUBE_REFRESH_TOKEN
+
+
+# ──────────────────────────────────────────
+# 7. GitHub — رفع الكود تلقائياً
+#    الموقع: https://github.com/settings/tokens
+#    الصلاحيات المطلوبة: repo (Full control)
+# ──────────────────────────────────────────
+GITHUB_TOKEN=YOUR_GITHUB_TOKEN
+
+
+# ──────────────────────────────────────────
+# 8. إعدادات عامة (لا تغيّرها)
+# ──────────────────────────────────────────
+MOCK_MODE=false

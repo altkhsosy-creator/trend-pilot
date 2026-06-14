@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "sEAHfrfzdPLD8AjAOsFSI"
+uri = "file://backend/env_template.txt"
+type = "text"
+title = "TrendPilot — قائمة مفاتيح API (.env template)"
