@@ -125,6 +125,48 @@ def add_segment_music(video_segment, segment_type, duration):
         return video_segment
 
 
+def _build_dynamic_music_track(segment_music_info, music_dir, output_path):
+    """
+    يبني مسار موسيقي ديناميكي يتغير مع كل مقطع.
+    segment_music_info: list of (duration_seconds, music_type)
+    يُخرج ملف AAC بنفس مدة الفيديو بالضبط.
+    """
+    if not segment_music_info:
+        return None
+
+    cmd = ["ffmpeg", "-y"]
+    filter_parts = []
+
+    for i, (duration, music_type) in enumerate(segment_music_info):
+        music_file = get_music_for_segment(music_type)
+        music_path = os.path.join(music_dir, music_file)
+        if not os.path.exists(music_path):
+            music_path = os.path.join(music_dir, "bgm_calm.mp3")
+        cmd += ["-stream_loop", "-1", "-i", music_path]
+        filter_parts.append(
+            f"[{i}:a]atrim=duration={round(duration, 3)},"
+            f"asetpts=PTS-STARTPTS,volume=0.08[m{i}]"
+        )
+
+    n = len(segment_music_info)
+    concat_inputs = "".join(f"[m{i}]" for i in range(n))
+    filter_complex = ";".join(filter_parts) + f";{concat_inputs}concat=n={n}:v=0:a=1[music_out]"
+
+    cmd += ["-filter_complex", filter_complex,
+            "-map", "[music_out]",
+            "-c:a", "aac", "-b:a", "128k",
+            output_path]
+
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 500:
+        types_used = list(dict.fromkeys(t for _, t in segment_music_info))
+        print(f"[music] ✅ مسار ديناميكي ({n} مقاطع) → {' → '.join(types_used)}")
+        return output_path
+
+    print(f"[music] ⚠️ فشل بناء المسار الديناميكي، سيُستخدم الملف الثابت")
+    return None
+
+
 def get_stock_video_urls(query="dark mystery investigation", n=8):
     """يجلب فيديوهات من Pexels حسب موضوع القصة"""
     if not PEXELS_API_KEY:
@@ -484,6 +526,11 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
 
     os.makedirs(os.path.dirname(output) if os.path.dirname(output) else ".", exist_ok=True)
 
+    # حساب hook_indices لتحديد نوع الموسيقى
+    hook_indices = [i for i, (_, h) in enumerate(segments) if h]
+    segment_music_info = []  # list of (duration, music_type)
+    elapsed_time = 0.0
+
     with tempfile.TemporaryDirectory() as tmp:
         segment_files = []
 
@@ -493,6 +540,7 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
             _ffmpeg_make_title_card(title_path, title, duration=5)
             if os.path.exists(title_path) and os.path.getsize(title_path) > 500:
                 segment_files.append(title_path)
+                segment_music_info.append((5.0, "hook_start"))
                 print("[video] ✅ Title Card أُضيف")
 
         duration_per_segment = total / max(len(segments), 1)
@@ -502,6 +550,14 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
             if is_hook:
                 seg_dur = max(2.5, seg_dur * 0.6)
             seg_dur = round(seg_dur, 3)
+
+            # تحديد نوع الموسيقى لهذا المقطع
+            music_type = detect_music_type(
+                text, idx, len(segments), is_hook,
+                hook_indices, elapsed_time, total
+            )
+            segment_music_info.append((seg_dur, music_type))
+            elapsed_time += seg_dur
 
             # جلب فيديو Pexels مخصص لمحتوى المقطع
             query = _segment_pexels_query(text, story_type)
@@ -545,21 +601,38 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
             capture_output=True
         )
 
-        # إضافة الصوت + موسيقى خلفية
+        # إضافة الصوت + موسيقى خلفية ديناميكية
         music_dir = os.path.join(os.path.dirname(__file__), "assets", "music")
-        music_file = os.path.join(music_dir, "bgm_suspense.mp3")
-        if not os.path.exists(music_file):
-            music_file = os.path.join(music_dir, "bgm_calm.mp3")
-        has_music = os.path.exists(music_file)
+        dynamic_music_path = os.path.join(tmp, "dynamic_music.aac")
+        music_track = _build_dynamic_music_track(
+            segment_music_info, music_dir, dynamic_music_path
+        )
+
+        # fallback إلى ملف ثابت إذا فشل الديناميكي
+        if not music_track:
+            music_track = os.path.join(music_dir, "bgm_suspense.mp3")
+            if not os.path.exists(music_track):
+                music_track = os.path.join(music_dir, "bgm_calm.mp3")
+            use_stream_loop = True
+        else:
+            use_stream_loop = False
+
+        has_music = music_track and os.path.exists(music_track)
 
         if has_music:
+            if use_stream_loop:
+                music_input = ["-stream_loop", "-1", "-i", music_track]
+                audio_filter = "[2:a]volume=0.08[music];[1:a][music]amix=inputs=2:duration=first:normalize=0[aout]"
+            else:
+                music_input = ["-i", music_track]
+                audio_filter = "[1:a][2:a]amix=inputs=2:duration=first:normalize=0[aout]"
+
             subprocess.run(
                 ["ffmpeg", "-y",
                  "-i", raw_video,
                  "-i", audio_path,
-                 "-stream_loop", "-1", "-i", music_file,
-                 "-filter_complex",
-                 "[2:a]volume=0.08[music];[1:a][music]amix=inputs=2:duration=first[aout]",
+                 *music_input,
+                 "-filter_complex", audio_filter,
                  "-map", "0:v", "-map", "[aout]",
                  "-t", str(total + 5),
                  "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
