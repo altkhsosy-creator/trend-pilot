@@ -47,3 +47,8 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Sensitive files — never commit
+backend/env_ready.txt
+backend/.env
+.env
