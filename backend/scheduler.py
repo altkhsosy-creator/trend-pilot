@@ -10,7 +10,7 @@ from voice import text_to_speech
 from video import create_video
 from package_builder import build_content_package
 from notify import send_notification
-from short_generator import extract_shorts
+from short_generator import generate_independent_shorts
 from youtube_upload import upload_video, upload_short, generate_description, set_thumbnail
 from thumbnail import create_thumbnail
 
@@ -60,9 +60,10 @@ def job():
     print(f"[scheduler] Video generated: {video}")
     send_notification(f"🎬 فيديو اليوم جاهز!\n\nالعنوان: {title}\n📹 رابط المعاينة: http://46.101.250.86:5001")
 
-    # استخراج Shorts من الفيديو الطويل
-    shorts_paths = extract_shorts(video, num_shorts=3, duration=60)
-    print(f"[scheduler] Extracted {len(shorts_paths)} shorts")
+    # إنتاج Shorts مستقلة بمحتوى فريد (لا قص من الفيديو الطويل)
+    print("[scheduler] 📱 Generating 3 independent Shorts...")
+    shorts_paths = generate_independent_shorts(title=title, script=script, num_shorts=3)
+    print(f"[scheduler] 📱 {len(shorts_paths)} independent Shorts ready")
 
     # 7. تجميع كل شيء في حزمة محتوى واحدة
     yt_description = generate_description(title, script, tags)
@@ -118,12 +119,15 @@ def job():
         if thumbnail_path and yt_video_id:
             set_thumbnail(yt_video_id, thumbnail_path)
 
-        # رفع الـ Shorts
+        # رفع الـ Shorts — عناوين مستقلة لكل زاوية
+        short_angle_titles = [
+            f"The One Detail Nobody Noticed… {title[:55]}",
+            f"The Moment Everything Changed — {title[:55]}",
+            f"The Question Nobody Can Answer — {title[:55]}",
+        ]
         for i, short_path in enumerate(shorts_paths):
             if os.path.exists(short_path):
-                short_labels = ["Hook", "Plot Twist", "Climax"]
-                label = short_labels[i] if i < len(short_labels) else f"Part {i+1}"
-                short_title = f"{title[:70]} — {label}"
+                short_title = short_angle_titles[i] if i < len(short_angle_titles) else f"{title[:70]} — Part {i+1}"
                 sid = upload_short(
                     video_path=short_path,
                     title=short_title,
