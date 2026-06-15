@@ -3,6 +3,7 @@ import requests
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+PREVIEW_URL = os.getenv("PREVIEW_URL", "http://46.101.250.86:3002")
 
 
 def _post(payload: dict):
@@ -42,7 +43,8 @@ def send_approval_request(video_type: str, video_name: str, scheduled_time: str)
             f"📺 *Publication Request*\n\n"
             f"Type: `{video_type}`\n"
             f"File: `{video_name}`\n"
-            f"Scheduled: `{scheduled_time}`"
+            f"Scheduled: `{scheduled_time}`\n\n"
+            f"🔍 *Preview:* {PREVIEW_URL}"
         ),
         "parse_mode": "Markdown",
         "reply_markup": keyboard,
@@ -74,6 +76,7 @@ def send_content_package_notification(
         f"🎥 *Long Video:* `{long_name}`\n\n"
         f"✂️ *Shorts ({len(shorts_paths)}):*\n"
         f"{short_lines}\n"
+        f"🔍 *Preview:* {PREVIEW_URL}\n\n"
         f"⏰ Scheduled for publishing today."
     )
 
