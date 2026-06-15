@@ -1,5 +1,5 @@
 # =============================================================
-#   TrendPilot — .env (جاهز للاستخدام على السيرفر)
+#   TrendPilot — .env جاهز بكل المفاتيح
 #   ضعه في: /root/trend-pilot/backend/.env
 # =============================================================
 
@@ -11,10 +11,7 @@ YOUTUBE_CLIENT_ID=723099238347-tmjms45d5sdkksa8bu16h2nreitpgnot.apps.googleuserc
 YOUTUBE_CLIENT_SECRET=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
 YOUTUBE_REFRESH_TOKEN=1//0gFAJnv_yJpUNCgYIARAAGBASNwF-L9IrbXNX79WkWzwQO7rO-_bIP0PxYv20oQWEsnQDfDfd1VdkRTH77-2_RY3iKcXeWO0Nkbg
 GITHUB_TOKEN=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
+TELEGRAM_BOT_TOKEN=8326360956:AAEd2tn8-CHzbvPEnBh1mPE2byx9zQDl-VM
+TELEGRAM_CHAT_ID=918121977
 
-# ── Telegram (أضفهما يدوياً) ──────────────────────────────────
-TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
-TELEGRAM_CHAT_ID=YOUR_TELEGRAM_CHAT_ID
-
-# ── General ───────────────────────────────────────────────────
 MOCK_MODE=false
