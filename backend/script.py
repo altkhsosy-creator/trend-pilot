@@ -181,28 +181,51 @@ def _real_content(topic: str) -> dict:
 
 Title: {topic}
 
+CRITICAL REQUIREMENTS — do NOT skip any:
+1. Script MUST be 2200-2600 words minimum. Count them. If shorter, expand with more detail.
+2. Script MUST contain dramatic pauses (…) at least 15 times before key revelations.
+3. Script MUST include personal commentary phrases like "Here's what gets me about this…", "I can't stop thinking about…", "The detail that haunts me…"
+4. Script MUST end with a haunting open question in the LAST paragraph.
+5. Add a cliffhanger or tension spike every 90 seconds of narration.
+6. NEVER use filler phrases. Every sentence must either reveal information, build dread, or deepen mystery.
+
 Return a JSON object with EXACTLY these fields:
 {{
-  "title": "YouTube title — max 100 chars. Real hook: name/date/place or shocking claim. High CTR. Dark, serious tone.",
-  "script": "Full 10-12 minute True Crime script (2200-2600 words). Follows the 7-part structure. Cliffhanger every 90 seconds. Dramatic pauses (…) before revelations. Personal commentary. Haunting end question.",
-  "description": "YouTube description 150-250 words. Gripping hook in first 2 lines. Story summary. CTA to subscribe and comment. True crime hashtags.",
+  "title": "YouTube title — max 100 chars, shocking hook, real name/date/place. NO clickbait. Dark, serious, investigative tone.",
+  "script": "FULL 2200-2600 word True Crime script. All 7 parts required. No skipping.",
+  "description": "YouTube description 150-250 words. Hook in first 2 lines. Story summary. Subscribe CTA. True crime hashtags.",
   "tags": ["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10"]
 }}
 
 Return ONLY valid JSON — no markdown, no code fences, no extra text."""
 
     _client = OpenAI(api_key=OPENAI_API_KEY)
-    response = _client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.85,
-    )
 
-    return json.loads(response.choices[0].message.content)
+    for attempt in range(1, 4):  # حتى 3 محاولات
+        print(f"[script] محاولة {attempt}/3 لتوليد السكريبت...")
+        response = _client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.85 + (attempt - 1) * 0.05,  # رفع الإبداع مع كل محاولة
+        )
+
+        result = json.loads(response.choices[0].message.content)
+        script = result.get("script", "")
+        words = len(script.split())
+
+        if words >= 2000:
+            if attempt > 1:
+                print(f"[script] ✅ نجح في المحاولة {attempt} ({words:,} كلمة)")
+            return result
+
+        print(f"[script] ⚠️ محاولة {attempt}: السكريبت قصير ({words:,} كلمة) — إعادة المحاولة...")
+
+    print(f"[script] ⚠️ انتهت المحاولات — يُستخدم آخر نتيجة")
+    return result
 
 
 # --------------------------------------------------
