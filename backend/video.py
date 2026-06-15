@@ -349,22 +349,56 @@ def _get_audio_duration(path):
         return 0.0
 
 
-def _ffmpeg_trim_clip(src, dst, duration, w=W, h=H):
-    """يقص مقطع فيديو ويعيد ضبط حجمه بـ ffmpeg — لا يُحمَّل في الذاكرة"""
+def _ffmpeg_trim_clip(src, dst, duration, w=W, h=H, fade_in=0.3, fade_out=0.3):
+    """
+    يقص مقطع فيديو مع:
+    - تدرج لوني سينمائي (cinematic grade)
+    - fade-in من الأسود في البداية
+    - fade-out للأسود في النهاية
+    """
+    fade_out_start = max(0.0, duration - fade_out)
     vf = (
         f"scale={w}:{h}:force_original_aspect_ratio=increase,"
-        f"crop={w}:{h}"
+        f"crop={w}:{h},"
+        # تدرج لوني سينمائي — داكن، درامي، بارد
+        f"curves=r='0/0 0.15/0.07 0.75/0.62 1/0.88':"
+        f"g='0/0 0.15/0.09 0.75/0.60 1/0.84':"
+        f"b='0/0.04 0.4/0.35 0.75/0.58 1/0.80',"
+        # fade-in من الأسود
+        f"fade=t=in:st=0:d={fade_in},"
+        # fade-out للأسود
+        f"fade=t=out:st={round(fade_out_start, 3)}:d={fade_out}"
     )
     subprocess.run(
         ["ffmpeg", "-y", "-i", src,
          "-t", str(duration),
          "-vf", vf,
          "-r", "24",
-         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
          "-an",
          dst],
         capture_output=True
     )
+
+
+# مدد المقاطع حسب نوع المشهد — لخلق إيقاع وثائقي
+SEGMENT_DURATIONS = {
+    "hook_start":    (3.0, 5.0),   # بداية سريعة لشد الانتباه
+    "hook_middle":   (3.5, 5.5),   # hook وسطي
+    "hook_end":      (2.5, 4.0),   # ذروة hook — أسرع قطع
+    "story_normal":  (5.0, 8.0),   # سرد عادي — أطول للتنفس
+    "story_tension": (3.0, 5.0),   # توتر — قطع أسرع
+    "story_climax":  (2.5, 4.0),   # ذروة — أسرع قطع
+    "emotional":     (6.0, 9.0),   # عاطفي — أبطأ للتأمل
+    "closing":       (5.0, 7.0),   # خاتمة — هادئة ومدروسة
+}
+
+
+def get_segment_duration(music_type: str, audio_dur_per_seg: float) -> float:
+    """يحسب مدة المقطع المناسبة بناءً على نوعه وإيقاع الصوت"""
+    min_dur, max_dur = SEGMENT_DURATIONS.get(music_type, (4.0, 7.0))
+    # نطابق مع إيقاع الصوت لكن ضمن الحدود الدرامية
+    return round(min(max_dur, max(min_dur, audio_dur_per_seg * 0.8)), 3)
 
 
 def _ffmpeg_make_color_clip(dst, duration, w=W, h=H, color="0x0A0A1E"):
@@ -546,31 +580,34 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
         duration_per_segment = total / max(len(segments), 1)
 
         for idx, (text, is_hook) in enumerate(segments):
-            seg_dur = min(duration_per_segment, 8.0)
-            if is_hook:
-                seg_dur = max(2.5, seg_dur * 0.6)
-            seg_dur = round(seg_dur, 3)
-
-            # تحديد نوع الموسيقى لهذا المقطع
+            # تحديد نوع المشهد أولاً لحساب المدة المناسبة
             music_type = detect_music_type(
                 text, idx, len(segments), is_hook,
                 hook_indices, elapsed_time, total
             )
+
+            # مدة ديناميكية حسب نوع المشهد — وثائقي حقيقي
+            seg_dur = get_segment_duration(music_type, duration_per_segment)
+
             segment_music_info.append((seg_dur, music_type))
             elapsed_time += seg_dur
+
+            # fade أسرع عند الـ hooks والذروات، أبطأ عند العاطفي والسرد
+            is_intense = music_type in ("hook_start", "hook_end", "story_climax")
+            fade_dur = 0.2 if is_intense else 0.4
 
             # جلب فيديو Pexels مخصص لمحتوى المقطع
             query = _segment_pexels_query(text, story_type)
             urls = get_stock_video_urls(query, n=2)
 
             raw_path = os.path.join(tmp, f"raw_{idx:03d}.mp4")
-            seg_path = os.path.join(tmp, f"seg_{idx:03d}.mp4")
             used_video = False
 
             for url in urls:
                 clip = download_clip(url, tmp)
                 if clip:
-                    _ffmpeg_trim_clip(clip, raw_path, seg_dur)
+                    _ffmpeg_trim_clip(clip, raw_path, seg_dur,
+                                      fade_in=fade_dur, fade_out=fade_dur)
                     if os.path.exists(raw_path) and os.path.getsize(raw_path) > 1000:
                         used_video = True
                         break
@@ -583,7 +620,7 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
             if os.path.exists(final_seg):
                 segment_files.append(final_seg)
                 icon = "🎬" if used_video else ("🔥" if is_hook else "🃏")
-                print(f"[video] مقطع {idx+1}: {icon}")
+                print(f"[video] مقطع {idx+1}: {icon} | {music_type} | {seg_dur}s")
 
         if not segment_files:
             raise RuntimeError("[video] لم يتم إنتاج أي مقطع")
