@@ -6,3 +6,9 @@ id = "sEAHfrfzdPLD8AjAOsFSI"
 uri = "file://backend/env_template.txt"
 type = "text"
 title = "TrendPilot — قائمة مفاتيح API (.env template)"
+
+[[outputs]]
+id = "eyeotMW-YHa5ZEKB_8mqk"
+uri = "file://backend/env_ready.txt"
+type = "text"
+title = "TrendPilot — .env جاهز بكل المفاتيح"
