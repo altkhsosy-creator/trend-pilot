@@ -523,15 +523,11 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
                 color = "0x640A0A" if is_hook else "0x0A0A1E"
                 _ffmpeg_make_color_clip(raw_path, seg_dur, color=color)
 
-            # إضافة Text Overlay
-            overlay_text = text[:120].strip()
-            _ffmpeg_add_text_overlay(raw_path, seg_path, overlay_text)
-
-            final_seg = seg_path if (os.path.exists(seg_path) and os.path.getsize(seg_path) > 500) else raw_path
+            final_seg = raw_path
             if os.path.exists(final_seg):
                 segment_files.append(final_seg)
                 icon = "🎬" if used_video else ("🔥" if is_hook else "🃏")
-                print(f"[video] مقطع {idx+1}: {icon} + text overlay")
+                print(f"[video] مقطع {idx+1}: {icon}")
 
         if not segment_files:
             raise RuntimeError("[video] لم يتم إنتاج أي مقطع")
@@ -563,7 +559,7 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
                  "-i", audio_path,
                  "-stream_loop", "-1", "-i", music_file,
                  "-filter_complex",
-                 "[2:a]volume=0.20[music];[1:a][music]amix=inputs=2:duration=first[aout]",
+                 "[2:a]volume=0.08[music];[1:a][music]amix=inputs=2:duration=first[aout]",
                  "-map", "0:v", "-map", "[aout]",
                  "-t", str(total + 5),
                  "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
