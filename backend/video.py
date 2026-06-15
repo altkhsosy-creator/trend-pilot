@@ -40,7 +40,7 @@ def _set_audio(clip, audio):
     return clip.set_audio(audio)
 
 
-W, H = 854, 480
+W, H = 1920, 1080
 
 
 CLIMAX_KEYWORDS = {
@@ -453,17 +453,17 @@ def _ffmpeg_make_title_card(dst, title, duration=5, w=W, h=H):
 
     drawtext = (
         f"drawtext=fontfile={FONT_PATH}:text='{label}':"
-        f"fontsize=28:fontcolor=0xFF3333:x=(w-text_w)/2:y=h/2-90:"
+        f"fontsize=60:fontcolor=0xFF3333:x=(w-text_w)/2:y=h/2-200:"
         f"alpha='if(lt(t,0.5),t/0.5,1)',"
 
         f"drawtext=fontfile={FONT_PATH}:text='{title_text}':"
-        f"fontsize=40:fontcolor=white:x=(w-text_w)/2:y=h/2-40:"
+        f"fontsize=88:fontcolor=white:x=(w-text_w)/2:y=h/2-90:"
         f"box=1:boxcolor=black@0.0:alpha='if(lt(t,0.5),t/0.5,1)'"
     )
     if title_text2:
         drawtext += (
             f",drawtext=fontfile={FONT_PATH}:text='{title_text2}':"
-            f"fontsize=40:fontcolor=white:x=(w-text_w)/2:y=h/2+10:"
+            f"fontsize=88:fontcolor=white:x=(w-text_w)/2:y=h/2+20:"
             f"alpha='if(lt(t,0.5),t/0.5,1)'"
         )
 
@@ -492,18 +492,18 @@ def _ffmpeg_add_text_overlay(src, dst, text, w=W, h=H):
             pass
         return
 
-    box = "box=1:boxcolor=black@0.65:boxborderw=12"
-    y1 = "h-100" if line2 else "h-72"
-    y2 = "h-60"
+    box = "box=1:boxcolor=black@0.65:boxborderw=22"
+    y1 = "h-220" if line2 else "h-160"
+    y2 = "h-130"
 
     drawtext = (
         f"drawtext=fontfile={FONT_PATH}:text='{line1}':"
-        f"fontsize=34:fontcolor=white:x=(w-text_w)/2:y={y1}:{box}"
+        f"fontsize=68:fontcolor=white:x=(w-text_w)/2:y={y1}:{box}"
     )
     if line2:
         drawtext += (
             f",drawtext=fontfile={FONT_PATH}:text='{line2}':"
-            f"fontsize=34:fontcolor=white:x=(w-text_w)/2:y={y2}:{box}"
+            f"fontsize=68:fontcolor=white:x=(w-text_w)/2:y={y2}:{box}"
         )
 
     result = subprocess.run(
@@ -672,8 +672,8 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
                  "-filter_complex", audio_filter,
                  "-map", "0:v", "-map", "[aout]",
                  "-t", str(total + 5),
-                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
-                 "-c:a", "aac", "-b:a", "128k",
+                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+                 "-c:a", "aac", "-b:a", "192k",
                  "-movflags", "+faststart", "-shortest",
                  output],
                 capture_output=True
@@ -684,8 +684,8 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
                  "-i", raw_video, "-i", audio_path,
                  "-map", "0:v", "-map", "1:a",
                  "-t", str(total + 5),
-                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
-                 "-c:a", "aac", "-b:a", "128k",
+                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+                 "-c:a", "aac", "-b:a", "192k",
                  "-movflags", "+faststart", "-shortest",
                  output],
                 capture_output=True
