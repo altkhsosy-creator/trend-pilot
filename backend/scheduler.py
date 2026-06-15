@@ -40,9 +40,12 @@ def job():
     # 3. توليد المحتوى الكامل (عنوان، وصف، تاغات)
     content = generate_full_content(topic)
     title = content.get("title", topic)
+    title_variants = content.get("title_variants", [])
     description = content.get("description", "")
     tags = content.get("tags", [])
-    print(f"[scheduler] Generated title: {title[:60]}...")
+    print(f"[scheduler] Generated title: {title[:80]}")
+    if title_variants:
+        print(f"[scheduler] 📝 {len(title_variants)} title variants generated for A/B testing")
 
     # 4. توليد السكريبت
     script = generate_script()
@@ -72,6 +75,9 @@ def job():
         audio_path=audio,
         video_path=video,
     )
+    # حفظ بدائل العناوين للـ A/B testing
+    if title_variants:
+        package["title_variants"] = title_variants
 
     # 8. حفظ نسخة أرشيفية من الفيديو بـ timestamp
     os.makedirs(VIDEOS_DIR, exist_ok=True)
@@ -135,9 +141,14 @@ def job():
     # 10. إشعار Telegram
     yt_link = package.get("youtube_url", "لم يُرفع بعد")
     shorts_count = len(yt_short_ids)
+    variants_text = ""
+    if title_variants:
+        variants_lines = "\n".join(f"  {i+2}. {v[:90]}" for i, v in enumerate(title_variants[:4]))
+        variants_text = f"\n\n📝 بدائل A/B للعنوان:\n{variants_lines}"
     send_notification(
         f"✅ فيديو اليوم جاهز!\n\n"
-        f"📹 {title[:60]}\n\n"
+        f"📹 العنوان المختار:\n{title[:100]}"
+        f"{variants_text}\n\n"
         f"🔗 YouTube: {yt_link}\n"
         f"✂️ Shorts: {shorts_count} مقاطع"
     )

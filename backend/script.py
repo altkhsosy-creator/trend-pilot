@@ -189,9 +189,36 @@ CRITICAL REQUIREMENTS — do NOT skip any:
 5. Add a cliffhanger or tension spike every 90 seconds of narration.
 6. NEVER use filler phrases. Every sentence must either reveal information, build dread, or deepen mystery.
 
+TITLE FORMULA — follow this EXACTLY for all titles:
+"[Person/Incident] + [Shocking Specific Detail] + [Haunting Open Question]"
+
+GOOD title examples (use this style):
+✅ "She Traveled Europe Under 9 Fake Names. Nobody Knows Who She Was."
+✅ "He Confessed to 93 Murders. Detectives Still Don't Know If He's Telling the Truth."
+✅ "A Family of 6 Vanished Overnight. Their Car Was Found Running 3 Miles Away."
+✅ "She Called 911 and Said One Sentence. The Operator Never Forgot It."
+✅ "They Found His Body in 1987. His Name Was Finally Confirmed in 2024."
+
+BAD titles (never do this):
+❌ "The Isdal Woman — Unsolved Mystery"
+❌ "True Crime: The Zodiac Killer Case"
+❌ "A Shocking Cold Case You've Never Heard Of"
+
+The title must:
+- Name a real person, number, date, or specific fact
+- Contain ONE shocking concrete detail (a number, a date, an action)
+- End with a haunting statement or implicit question that demands clicking
+- Max 110 characters
+
 Return a JSON object with EXACTLY these fields:
 {{
-  "title": "YouTube title — max 100 chars, shocking hook, real name/date/place. NO clickbait. Dark, serious, investigative tone.",
+  "title": "Primary YouTube title following the formula above. Max 110 chars.",
+  "title_variants": [
+    "Variant 2 — same formula, different angle on the same story. Max 110 chars.",
+    "Variant 3 — lead with the number or date instead of the person. Max 110 chars.",
+    "Variant 4 — focus on the investigation failure or authorities' mistake. Max 110 chars.",
+    "Variant 5 — most emotional angle — victim's perspective. Max 110 chars."
+  ],
   "script": "FULL 2200-2600 word True Crime script. All 7 parts required. No skipping.",
   "description": "YouTube description 150-250 words. Hook in first 2 lines. Story summary. Subscribe CTA. True crime hashtags.",
   "tags": ["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10"]
