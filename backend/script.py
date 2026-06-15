@@ -206,11 +206,75 @@ Return ONLY valid JSON — no markdown, no code fences, no extra text."""
 
 
 # --------------------------------------------------
+# Script Quality Checker
+# --------------------------------------------------
+
+def check_script_quality(script: str, title: str = "") -> dict:
+    """يفحص جودة السكريبت ويطبع تقريراً مفصلاً"""
+    words = len(script.split())
+    chars = len(script)
+    duration_min = round(words / 150, 1)  # متوسط 150 كلمة/دقيقة
+
+    # فحص الأجزاء السبعة
+    structure_checks = {
+        "Hook":           any(w in script[:400] for w in ["…", "?", "one detail", "what if", "nobody", "here's"]),
+        "Setting":        any(w in script.lower() for w in ["in ", "was found", "lived", "worked", "town", "city", "year"]),
+        "Crime unfolds":  any(w in script.lower() for w in ["disappeared", "murdered", "killed", "found dead", "missing", "vanished"]),
+        "Investigation":  any(w in script.lower() for w in ["police", "detective", "investigat", "evidence", "forensic", "autopsy"]),
+        "Twist":          any(w in script.lower() for w in ["but", "however", "twist", "revealed", "discovered", "shocking"]),
+        "Commentary":     any(p in script for p in ["gets me", "I keep", "can't stop", "Here's what", "think about"]),
+        "Closing Q":      "?" in script[-300:],
+    }
+
+    # إحصاءات
+    pauses = script.count("…")
+    hooks_inserted = sum(1 for h in [
+        "changed everything", "didn't end", "mystery deepens",
+        "get really strange", "no one was prepared", "happened next"
+    ] if h in script.lower())
+
+    # تحديد المستوى
+    score = sum(structure_checks.values())
+    if words >= 2200 and score >= 6:
+        level = "🟢 ممتاز"
+    elif words >= 1800 and score >= 4:
+        level = "🟡 جيد"
+    else:
+        level = "🔴 يحتاج تحسين"
+
+    # طباعة التقرير
+    print("\n" + "="*55)
+    print(f"📋 تقرير جودة السكريبت — {level}")
+    print("="*55)
+    if title:
+        print(f"📌 العنوان: {title[:70]}")
+    print(f"📝 الكلمات  : {words:,}  (المطلوب: 2200-2600)")
+    print(f"⏱️  المدة    : ~{duration_min} دقيقة  (المطلوب: 10-12)")
+    print(f"⏸️  توقفات…  : {pauses}  (كلما زاد كلما أفضل)")
+    print(f"🔗 hooks    : {hooks_inserted}  (كل 90 ثانية)")
+    print("\n📐 البنية السبعية:")
+    for part, ok in structure_checks.items():
+        print(f"  {'✅' if ok else '❌'} {part}")
+    print(f"\n🏆 النتيجة: {score}/7 أجزاء — {level}")
+    print("="*55 + "\n")
+
+    return {
+        "words": words, "duration_min": duration_min,
+        "score": score, "level": level,
+        "pauses": pauses, "structure": structure_checks,
+    }
+
+
+# --------------------------------------------------
 # Public API
 # --------------------------------------------------
 
 def generate_full_content(topic: str) -> dict:
     if MOCK_MODE:
         print(f"[MOCK_MODE] Skipping OpenAI — returning mock True Crime content for: {topic}")
-        return _mock_content(topic)
-    return _real_content(topic)
+        result = _mock_content(topic)
+    else:
+        result = _real_content(topic)
+
+    check_script_quality(result["script"], result.get("title", ""))
+    return result
