@@ -1,17 +1,19 @@
 """
 thumbnail.py — مولّد Thumbnail احترافي بأسلوب True Crime
-يولّد صورة 1280x720 لكل قصة مع:
-  - خلفية Pexels مخصصة + تعتيم دراماتيكي
-  - vignette داكن على الحواف
-  - عنوان بخط BebasNeue كبير
-  - شريط أحمر "TRUE CRIME" أعلى
-  - تأثير ضوء أحمر خافت في الخلفية
+تصميم معدّل لأقصى CTR:
+  - وجه/شخصية درامية على اليسار (Pexels)
+  - تدرج شفاف يربط الوجه بالخلفية
+  - كلمة صادمة كبيرة جداً على اليمين (hook word)
+  - العنوان الكامل أصغر تحتها
+  - شريط "TRUE CRIME" أعلى
+  - تأثيرات سينمائية داكنة
 """
 
 import os
 import re
-import textwrap
+import random
 import requests
+from io import BytesIO
 from PIL import (
     Image, ImageDraw, ImageFont, ImageFilter,
     ImageEnhance, ImageOps
@@ -33,7 +35,7 @@ RED_DARK     = (160, 0,   0)
 WHITE        = (255, 255, 255)
 YELLOW       = (255, 220, 50)
 BLACK        = (0,   0,   0)
-DARK_OVERLAY = (0,   0,   0,  170)   # شفافية الطبقة الداكنة
+DARK_OVERLAY = (0,   0,   0,  170)
 
 
 # -------------------------------------------------------
@@ -43,6 +45,26 @@ _FALLBACK_QUERIES = [
     "dark crime scene fog", "mystery dark alley", "abandoned building night",
     "crime investigation dark", "shadow mystery night",
 ]
+
+# استعلامات وجوه درامية حسب نوع القصة
+_FACE_QUERIES = {
+    "murder":      ["dramatic woman portrait dark shadow", "man dark dramatic portrait mystery"],
+    "missing":     ["worried woman dark portrait dramatic", "missing person shadow dark"],
+    "spy":         ["mysterious woman dark portrait spy", "shadow person dark dramatic"],
+    "cold_case":   ["detective woman dark dramatic", "investigator shadow portrait"],
+    "serial":      ["scared woman dark dramatic portrait", "horror shadow person dark"],
+    "default":     ["dramatic person portrait dark mystery", "woman shadow dark dramatic mystery",
+                    "man dark portrait dramatic thriller"],
+}
+
+# كلمات قوية لاستخراج الـ hook
+_SHOCK_WORDS = {
+    "dead", "killed", "murdered", "missing", "vanished", "disappeared",
+    "fake", "unknown", "unsolved", "never", "secret", "exposed", "caught",
+    "found", "buried", "identity", "identities", "years", "nobody", "alone",
+    "survived", "escaped", "confessed", "sentenced", "executed",
+}
+
 
 def _pexels_query(title: str) -> str:
     t = title.lower()
@@ -59,27 +81,103 @@ def _pexels_query(title: str) -> str:
     return "true crime dark mystery"
 
 
-def _fetch_pexels_image(query: str) -> Image.Image | None:
+def _fetch_pexels_image(query: str, orientation: str = "landscape") -> Image.Image | None:
     if not PEXELS_KEY:
         return None
     try:
         r = requests.get(
             "https://api.pexels.com/v1/search",
             headers={"Authorization": PEXELS_KEY},
-            params={"query": query, "per_page": 5, "orientation": "landscape"},
+            params={"query": query, "per_page": 8, "orientation": orientation},
             timeout=10,
         )
         photos = r.json().get("photos", [])
         if not photos:
             return None
-        url = photos[0]["src"]["large2x"]
+        photo = random.choice(photos[:5])
+        url = photo["src"]["large2x"]
         img_data = requests.get(url, timeout=15).content
-        from io import BytesIO
-        img = Image.open(BytesIO(img_data)).convert("RGB")
-        return img
+        return Image.open(BytesIO(img_data)).convert("RGB")
     except Exception as e:
         print(f"[thumbnail] Pexels fetch failed: {e}")
         return None
+
+
+def _fetch_face_image(story_type: str = "default") -> Image.Image | None:
+    """يجلب صورة شخص/وجه درامي من Pexels حسب نوع القصة"""
+    queries = _FACE_QUERIES.get(story_type, _FACE_QUERIES["default"])
+    for query in queries:
+        img = _fetch_pexels_image(query, orientation="portrait")
+        if img:
+            return img
+    # fallback landscape
+    return _fetch_pexels_image("dramatic person dark mystery portrait")
+
+
+def _extract_hook_words(title: str) -> str:
+    """
+    يستخرج 2-3 كلمات صادمة من العنوان لعرضها كبيرة في الـ Thumbnail.
+    مثال: "She Was Found Dead With 9 Fake Identities" → "9 FAKE IDENTITIES"
+    """
+    words = title.split()
+
+    # ابحث عن رقم + الكلمة التالية
+    for i, w in enumerate(words):
+        if w.isdigit() and i + 1 < len(words):
+            next_words = words[i+1: i+3]
+            return (w + " " + " ".join(next_words)).upper()
+
+    # ابحث عن كلمة صادمة + الكلمة التالية
+    for i, w in enumerate(words):
+        if w.lower().rstrip(".,!?") in _SHOCK_WORDS and i + 1 < len(words):
+            return (w + " " + words[i+1]).upper().rstrip(".,!?")
+
+    # fallback: أول كلمتين مؤثرتين
+    clean = [w for w in words if len(w) > 3]
+    return " ".join(clean[:2]).upper() if len(clean) >= 2 else title[:20].upper()
+
+
+def _composite_face_left(bg: Image.Image, face: Image.Image) -> Image.Image:
+    """
+    يضع الوجه على الجانب الأيسر مع تدرج شفاف نحو اليمين.
+    الوجه يشغل ~50% من العرض.
+    """
+    face_w = int(W * 0.52)
+    face_h = H
+
+    # قص الوجه للحجم المطلوب (portrait crop من المركز)
+    fw, fh = face.size
+    scale = max(face_w / fw, face_h / fh)
+    new_fw, new_fh = int(fw * scale), int(fh * scale)
+    face_resized = face.resize((new_fw, new_fh), Image.LANCZOS)
+    # اقتصاص من المركز
+    left = (new_fw - face_w) // 2
+    top = max(0, new_fh - face_h)  # احتفظ بالوجه في الأعلى
+    face_cropped = face_resized.crop((left, top, left + face_w, top + face_h))
+
+    # تطبيق التعتيم الدرامي على الوجه
+    face_dark = ImageEnhance.Brightness(face_cropped).enhance(0.55)
+    face_dark = ImageEnhance.Contrast(face_dark).enhance(1.4)
+    face_dark = ImageEnhance.Color(face_dark).enhance(0.6)
+
+    # إنشاء gradient mask: أبيض على اليسار → شفاف على اليمين
+    grad = Image.new("L", (face_w, face_h))
+    for x in range(face_w):
+        # قوي في اليسار، يتلاشى في آخر 35%
+        fade_start = int(face_w * 0.60)
+        if x <= fade_start:
+            val = 255
+        else:
+            val = int(255 * (1 - (x - fade_start) / (face_w - fade_start)) ** 1.5)
+        for y in range(face_h):
+            grad.putpixel((x, y), val)
+
+    # دمج الوجه مع الخلفية
+    result = bg.copy().convert("RGBA")
+    face_rgba = face_dark.convert("RGBA")
+    face_rgba.putalpha(grad)
+    result.paste(face_rgba, (0, 0), face_rgba)
+    return result.convert("RGB")
 
 
 # -------------------------------------------------------
@@ -216,96 +314,116 @@ def create_thumbnail(
         safe = re.sub(r"[^\w]", "_", title[:40]).lower()
         output_path = os.path.join(OUTPUT_DIR, f"thumb_{safe}.jpg")
 
-    # ── الخلفية ──────────────────────────────────────────
-    query = _pexels_query(title)
-    bg = _fetch_pexels_image(query)
-
+    # ── 1. خلفية ─────────────────────────────────────────
+    bg_query = _pexels_query(title)
+    bg = _fetch_pexels_image(bg_query)
     if bg is None:
-        bg = Image.new("RGB", (W, H), (10, 10, 15))
+        bg = Image.new("RGB", (W, H), (8, 8, 14))
     else:
         bg = _apply_cinematic_grade(bg)
-
     bg = _add_vignette(bg)
     bg = _add_red_glow(bg)
     bg = _add_noise(bg)
 
+    # ── 2. وجه/شخصية على اليسار ──────────────────────────
+    face_type = "default"
+    tl = title.lower()
+    if any(w in tl for w in ["murder", "killer", "killed", "dead"]):
+        face_type = "murder"
+    elif any(w in tl for w in ["missing", "vanish", "disappear"]):
+        face_type = "missing"
+    elif any(w in tl for w in ["spy", "agent", "cia", "kgb", "identity"]):
+        face_type = "spy"
+    elif any(w in tl for w in ["serial", "ripper", "bundy"]):
+        face_type = "serial"
+    elif any(w in tl for w in ["cold case", "unsolved"]):
+        face_type = "cold_case"
+
+    face = _fetch_face_image(face_type)
+    if face:
+        bg = _composite_face_left(bg, face)
+        print(f"[thumbnail] 👤 وجه درامي أُضيف ({face_type})")
+    else:
+        print("[thumbnail] ⚠️ لم يُعثر على وجه — تصميم نص فقط")
+
     canvas = bg.convert("RGBA")
 
-    # ── طبقة شفافة داكنة فوق الصورة ──────────────────────
-    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 90))
-    canvas = Image.alpha_composite(canvas, overlay)
+    # طبقة داكنة شفافة على اليمين لإبراز النص
+    right_overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    rod = ImageDraw.Draw(right_overlay)
+    right_x = int(W * 0.45)
+    for x in range(right_x, W):
+        alpha = int(180 * ((x - right_x) / (W - right_x)) ** 0.6)
+        rod.line([(x, 0), (x, H)], fill=(0, 0, 0, alpha))
+    canvas = Image.alpha_composite(canvas, right_overlay)
 
     draw = ImageDraw.Draw(canvas)
 
-    # ── شريط أحمر أعلى "TRUE CRIME" ──────────────────────
+    # ── 3. شريط "TRUE CRIME" أعلى ────────────────────────
     bar_h = 68
-    draw.rectangle([0, 0, W, bar_h], fill=(RED_DARK[0], RED_DARK[1], RED_DARK[2], 240))
+    draw.rectangle([0, 0, W, bar_h], fill=(RED_DARK[0], RED_DARK[1], RED_DARK[2], 245))
     draw.rectangle([0, bar_h, W, bar_h + 3], fill=(RED[0], RED[1], RED[2], 255))
-
     font_label = _load_font(FONT_BEBAS, 48)
     label_text = "★  TRUE CRIME  ★"
-    bbox = draw.textbbox((0, 0), label_text, font=font_label)
-    lw = bbox[2] - bbox[0]
-    draw.text(((W - lw) // 2, 10), label_text, font=font_label, fill=WHITE)
+    lb = draw.textbbox((0, 0), label_text, font=font_label)
+    draw.text(((W - lb[2]) // 2, 10), label_text, font=font_label, fill=WHITE)
 
-    # ── خط فاصل أحمر ──────────────────────────────────────
-    draw.rectangle([60, H - 240, W - 60, H - 236], fill=RED)
+    # ── 4. الكلمة الصادمة الكبيرة (hook word) ────────────
+    hook = _extract_hook_words(title)
+    hook_words = hook.split()
+    RIGHT_X = int(W * 0.50)   # بداية منطقة النص على اليمين
+    RIGHT_W = W - RIGHT_X - 30  # عرض المنطقة
 
-    # ── العنوان الرئيسي ────────────────────────────────────
-    font_title_big  = _load_font(FONT_BEBAS, 118)
-    font_title_med  = _load_font(FONT_BEBAS, 96)
-    font_title_sml  = _load_font(FONT_BEBAS, 78)
+    # اختر حجم خط يناسب الكلمة
+    font_hook = _load_font(FONT_BEBAS, 130)
+    for size in [130, 110, 92, 76]:
+        font_hook = _load_font(FONT_BEBAS, size)
+        max_w = max(draw.textbbox((0, 0), w, font=font_hook)[2] for w in hook_words)
+        if max_w <= RIGHT_W:
+            break
 
-    lines = _wrap_title(title, max_chars=20)
-    n = len(lines)
-    font_t = font_title_big if n == 1 else (font_title_med if n == 2 else font_title_sml)
+    hook_line_h = draw.textbbox((0, 0), "A", font=font_hook)[3] + 6
+    hook_total_h = hook_line_h * len(hook_words)
+    hook_start_y = bar_h + int((H - bar_h - hook_total_h) * 0.30)
 
-    line_h = draw.textbbox((0, 0), "A", font=font_t)[3] + 8
-    total_text_h = line_h * n
-    start_y = H - 240 - total_text_h - 20
-
-    for i, line in enumerate(lines):
-        bbox = draw.textbbox((0, 0), line, font=font_t)
-        lw = bbox[2] - bbox[0]
-        x = (W - lw) // 2
-        y = start_y + i * (line_h + 4)
-
+    for i, hw in enumerate(hook_words):
+        hb = draw.textbbox((0, 0), hw, font=font_hook)
+        hx = RIGHT_X + (RIGHT_W - hb[2]) // 2
+        hy = hook_start_y + i * hook_line_h
         # ظل قوي
-        for dx, dy in [(-5,-5),(5,-5),(-5,5),(5,5),(0,-6),(0,6),(-6,0),(6,0)]:
-            draw.text((x + dx, y + dy), line, font=font_t, fill=(0, 0, 0, 255))
+        for dx, dy in [(-4,-4),(4,-4),(-4,4),(4,4),(0,-5),(0,5),(-5,0),(5,0)]:
+            draw.text((hx+dx, hy+dy), hw, font=font_hook, fill=(0,0,0,255))
+        # الكلمة الأولى بالأصفر، الباقي بالأبيض
+        color = YELLOW if i == 0 else WHITE
+        draw.text((hx, hy), hw, font=font_hook, fill=color)
 
-        # النص الأبيض مع تحديد الكلمة الأولى بلون أصفر/أحمر
-        words = line.split()
-        if i == 0 and len(words) >= 1:
-            # رسم الكلمة الأولى بالأصفر والباقي بالأبيض
-            cursor_x = x
-            for wi, word in enumerate(words):
-                color = YELLOW if wi == 0 else WHITE
-                draw.text((cursor_x, y), word + " ", font=font_t, fill=color)
-                wbox = draw.textbbox((0, 0), word + " ", font=font_t)
-                cursor_x += wbox[2] - wbox[0]
-        else:
-            draw.text((x, y), line, font=font_t, fill=WHITE)
+    # خط أحمر فاصل
+    sep_y = hook_start_y + hook_total_h + 14
+    draw.rectangle([RIGHT_X + 10, sep_y, W - 30, sep_y + 3], fill=RED)
 
-    # ── subtitle أو hook ──────────────────────────────────
-    if subtitle:
-        sub = subtitle[:60].upper()
-        font_sub = _load_font(FONT_BEBAS, 46)
-        bbox = draw.textbbox((0, 0), sub, font=font_sub)
-        sw = bbox[2] - bbox[0]
-        sx = (W - sw) // 2
-        sy = H - 90
-        _draw_outlined_text(draw, (sx, sy), sub, font_sub, YELLOW, BLACK, 3)
+    # ── 5. العنوان الكامل (أصغر، تحت الكلمة الصادمة) ────
+    font_title = _load_font(FONT_BEBAS, 52)
+    title_lines = _wrap_title(title, max_chars=24)
+    title_line_h = draw.textbbox((0, 0), "A", font=font_title)[3] + 4
+    ty = sep_y + 16
+    for line in title_lines:
+        tb = draw.textbbox((0, 0), line, font=font_title)
+        tx = RIGHT_X + (RIGHT_W - tb[2]) // 2
+        for dx, dy in [(-3,-3),(3,-3),(-3,3),(3,3)]:
+            draw.text((tx+dx, ty+dy), line, font=font_title, fill=(0,0,0,220))
+        draw.text((tx, ty), line, font=font_title, fill=WHITE)
+        ty += title_line_h
 
-    # ── رقم "UNSOLVED" أو "SOLVED" badge ────────────────
-    badge_font = _load_font(FONT_BEBAS, 36)
-    badge_text = "UNSOLVED" if "unsolved" in title.lower() or "mystery" in title.lower() else "TRUE CRIME"
-    badge_w = draw.textbbox((0, 0), badge_text, badge_font)[2]
-    bx, by = 60, H - 80
-    draw.rectangle([bx - 8, by - 4, bx + badge_w + 8, by + 42], fill=RED)
-    draw.text((bx, by), badge_text, font=badge_font, fill=WHITE)
+    # ── 6. Badge أسفل اليمين ─────────────────────────────
+    badge_text = "UNSOLVED" if any(w in tl for w in ["unsolved", "mystery", "unknown", "nobody"]) else "COLD CASE"
+    font_badge = _load_font(FONT_BEBAS, 34)
+    bb = draw.textbbox((0, 0), badge_text, font=font_badge)
+    bx = RIGHT_X + 10
+    by = H - 72
+    draw.rectangle([bx - 6, by - 4, bx + bb[2] + 6, by + bb[3] + 4], fill=RED)
+    draw.text((bx, by), badge_text, font=font_badge, fill=WHITE)
 
-    # ── حفظ ───────────────────────────────────────────────
+    # ── 7. حفظ ───────────────────────────────────────────
     final = canvas.convert("RGB")
     final.save(output_path, "JPEG", quality=96, optimize=True)
     size_kb = os.path.getsize(output_path) // 1024
