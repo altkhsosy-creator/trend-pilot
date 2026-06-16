@@ -36,3 +36,14 @@ sleep 2
 bash /root/start_trendpilot.sh >> "$LOG_FILE" 2>&1
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🚀 السيرفر أُعيد تشغيله بنجاح" >> "$LOG_FILE"
+
+# إذا وُجد ملف TRIGGER_NOW — شغّل الـ job فوراً
+TRIGGER_FILE="$REPO_DIR/TRIGGER_NOW"
+if [ -f "$TRIGGER_FILE" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🎬 TRIGGER_NOW مكتشف — انتظار بدء السيرفر (25 ثانية)..." >> "$LOG_FILE"
+    sleep 25
+    RESP=$(curl -s -X POST http://localhost:8000/run 2>&1)
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ Job triggered: $RESP" >> "$LOG_FILE"
+    rm -f "$TRIGGER_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🗑️ TRIGGER_NOW حُذف" >> "$LOG_FILE"
+fi
