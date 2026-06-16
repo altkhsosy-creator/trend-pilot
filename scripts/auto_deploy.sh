@@ -14,6 +14,15 @@ trap "rm -f $LOCK_FILE" EXIT
 
 cd "$REPO_DIR" || exit 1
 
+# ── فحص TRIGGER_NOW أولاً (بغض النظر عن حالة الكود) ──
+TRIGGER_FILE="$REPO_DIR/TRIGGER_NOW"
+if [ -f "$TRIGGER_FILE" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🎬 TRIGGER_NOW — تشغيل الـ job فوراً..." >> "$LOG_FILE"
+    rm -f "$TRIGGER_FILE"
+    RESP=$(curl -s -X POST http://localhost:8000/run 2>&1)
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ Job triggered: $RESP" >> "$LOG_FILE"
+fi
+
 # جلب آخر commits من GitHub بدون تطبيق
 git fetch origin main --quiet 2>/dev/null
 
