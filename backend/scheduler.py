@@ -1,6 +1,7 @@
 import os
 import shutil
-from datetime import datetime
+import threading
+from datetime import datetime, date
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from viral_engine import get_viral_story
@@ -14,9 +15,29 @@ from short_generator import generate_independent_shorts
 from youtube_upload import upload_video, upload_short, generate_description, set_thumbnail
 from thumbnail import create_thumbnail
 
-VIDEOS_DIR = os.path.join(os.path.dirname(__file__), "output", "videos")
+VIDEOS_DIR    = os.path.join(os.path.dirname(__file__), "output", "videos")
+_LAST_RUN_FILE = os.path.join(os.path.dirname(__file__), "output", ".last_run_date")
 
 _latest_package: dict = {}
+
+
+def _record_job_run():
+    """يسجّل تاريخ آخر تشغيل ناجح للـ job"""
+    os.makedirs(os.path.dirname(_LAST_RUN_FILE), exist_ok=True)
+    with open(_LAST_RUN_FILE, "w") as f:
+        f.write(date.today().isoformat())
+
+
+def _has_run_today() -> bool:
+    """يفحص إذا كان الـ job شُغِّل اليوم بالفعل"""
+    if not os.path.exists(_LAST_RUN_FILE):
+        return False
+    try:
+        with open(_LAST_RUN_FILE) as f:
+            last = f.read().strip()
+        return last == date.today().isoformat()
+    except Exception:
+        return False
 
 
 def job():
@@ -158,6 +179,7 @@ def job():
     )
 
     _latest_package = package
+    _record_job_run()
     print("[scheduler] ✅ Daily job completed!")
     return package
 
@@ -172,21 +194,37 @@ def get_latest_package() -> dict:
 
 def start_scheduler():
     """
-    يبدأ جدولة المهام — تعمل يومياً الساعة 03:00 صباحاً
-    (UTC+3 = منتصف الليل UTC — مناسب للسيرفر)
-    الفيديو يكتمل ~03:35 → جاهز قبل أول وقت نشر (07:00)
+    يبدأ جدولة المهام — تعمل يومياً الساعة 03:00 صباحاً.
+    إذا لم يُشغَّل الـ job اليوم بعد (restart في منتصف اليوم مثلاً)
+    يُشغَّل تلقائياً في الخلفية بعد 10 ثوانٍ من الـ startup.
     """
     from apscheduler.triggers.cron import CronTrigger
     scheduler = BackgroundScheduler()
-    # كل يوم الساعة 03:00 بتوقيت السيرفر (UTC)
     scheduler.add_job(job, CronTrigger(hour=3, minute=0))
     scheduler.start()
+
+    today = date.today().isoformat()
+    ran_today = _has_run_today()
+
     print("[scheduler] ========================================")
     print("[scheduler] 🚀 Scheduler started successfully!")
-    print("[scheduler] 📅 Daily job: 03:00 AM (server UTC time)")
-    print("[scheduler] ⏱️ Video ready by ~03:35 AM")
-    print("[scheduler] 📺 First publish slot: 07:00 AM (Wed) / 09:00 AM (other days)")
+    print(f"[scheduler] 📅 Daily job: 03:00 AM (server UTC)")
+    print(f"[scheduler] 📆 Today: {today} | Already ran: {ran_today}")
     print("[scheduler] ========================================")
+
+    if not ran_today:
+        print("[scheduler] ⚡ Job لم يُشغَّل اليوم — سيبدأ تلقائياً بعد 10 ثوانٍ...")
+        def _delayed_run():
+            import time
+            time.sleep(10)
+            print(f"[scheduler] 🎬 تشغيل فوري ({today}) ...")
+            try:
+                job()
+            except Exception as e:
+                print(f"[scheduler] ❌ فشل التشغيل الفوري: {e}")
+        threading.Thread(target=_delayed_run, daemon=True).start()
+    else:
+        print(f"[scheduler] ✅ Job شُغِّل اليوم بالفعل — لا إعادة تشغيل")
 
 
 # للاختبار اليدوي - شغل الملف مباشرة
