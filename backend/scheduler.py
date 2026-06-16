@@ -172,15 +172,20 @@ def get_latest_package() -> dict:
 
 def start_scheduler():
     """
-    يبدأ جدولة المهام - تعمل كل 24 ساعة
+    يبدأ جدولة المهام — تعمل يومياً الساعة 03:00 صباحاً
+    (UTC+3 = منتصف الليل UTC — مناسب للسيرفر)
+    الفيديو يكتمل ~03:35 → جاهز قبل أول وقت نشر (07:00)
     """
+    from apscheduler.triggers.cron import CronTrigger
     scheduler = BackgroundScheduler()
-    scheduler.add_job(job, "interval", hours=24)
+    # كل يوم الساعة 03:00 بتوقيت السيرفر (UTC)
+    scheduler.add_job(job, CronTrigger(hour=3, minute=0))
     scheduler.start()
     print("[scheduler] ========================================")
     print("[scheduler] 🚀 Scheduler started successfully!")
-    print("[scheduler] 📅 Will run every 24 hours")
-    print("[scheduler] ⏱️ Next job: in 24 hours")
+    print("[scheduler] 📅 Daily job: 03:00 AM (server UTC time)")
+    print("[scheduler] ⏱️ Video ready by ~03:35 AM")
+    print("[scheduler] 📺 First publish slot: 07:00 AM (Wed) / 09:00 AM (other days)")
     print("[scheduler] ========================================")
 
 
