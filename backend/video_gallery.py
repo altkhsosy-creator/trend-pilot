@@ -223,6 +223,71 @@ def serve_video(filename):
     return 'File not found', 404
 
 
+@app.route('/deploy-log')
+def deploy_log():
+    """عرض آخر سطور من سجل الـ deploy"""
+    log_path = '/var/log/trendpilot_deploy.log'
+    lines = []
+    if os.path.exists(log_path):
+        with open(log_path, 'r') as f:
+            lines = f.readlines()[-50:]
+    else:
+        lines = ['لم يُعثر على سجل الـ deploy\n']
+    # git info
+    import subprocess
+    try:
+        commit = subprocess.check_output(['git', '-C', '/root/trend-pilot', 'rev-parse', '--short', 'HEAD'], text=True).strip()
+        commit_time = subprocess.check_output(['git', '-C', '/root/trend-pilot', 'log', '-1', '--format=%ci'], text=True).strip()
+    except Exception:
+        commit = 'غير معروف'
+        commit_time = ''
+    html = f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta http-equiv="refresh" content="15">
+<title>Deploy Log</title>
+<style>
+body{{background:#0f0c29;color:#eee;font-family:monospace;padding:20px}}
+h2{{color:#2ecc71;margin-bottom:10px}}
+.meta{{background:rgba(255,255,255,0.08);padding:10px;border-radius:8px;margin-bottom:16px;font-size:0.85rem}}
+pre{{background:#111;padding:16px;border-radius:8px;white-space:pre-wrap;font-size:0.8rem;line-height:1.6;max-height:70vh;overflow-y:auto}}
+.refresh{{opacity:0.5;font-size:0.75rem;margin-top:10px}}
+</style></head><body>
+<h2>📋 Deploy Log — آخر 50 سطر</h2>
+<div class="meta">
+  🔖 Commit الحالي: <b>{commit}</b> — {commit_time}<br>
+  🕒 الصفحة تتحدث تلقائياً كل 15 ثانية
+</div>
+<pre>{"".join(lines) or "لا يوجد سجل حتى الآن"}</pre>
+<p class="refresh">آخر تحديث: {datetime.now().strftime("%H:%M:%S")}</p>
+</body></html>'''
+    return html
+
+
+@app.route('/server-status')
+def server_status():
+    """حالة السيرفر كـ JSON"""
+    import subprocess
+    try:
+        commit = subprocess.check_output(['git', '-C', '/root/trend-pilot', 'rev-parse', '--short', 'HEAD'], text=True).strip()
+    except Exception:
+        commit = 'unknown'
+    local_vids = _get_local_videos()
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    env_has_openai = False
+    env_has_telegram = False
+    if os.path.exists(env_path):
+        env_content = open(env_path).read()
+        env_has_openai = 'OPENAI_API_KEY=' in env_content and 'YOUR_' not in env_content.split('OPENAI_API_KEY=')[-1][:10]
+        env_has_telegram = 'TELEGRAM_BOT_TOKEN=' in env_content and 'YOUR_' not in env_content.split('TELEGRAM_BOT_TOKEN=')[-1][:10]
+    from flask import jsonify
+    return jsonify({
+        'commit': commit,
+        'videos': len(local_vids),
+        'env_openai': env_has_openai,
+        'env_telegram': env_has_telegram,
+        'time': datetime.now().isoformat(),
+    })
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 3002))
     print(f"🎬 Video Gallery running at http://0.0.0.0:{port}")

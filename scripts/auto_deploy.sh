@@ -14,22 +14,21 @@ trap "rm -f $LOCK_FILE" EXIT
 
 cd "$REPO_DIR" || exit 1
 
-# ── تحديث .env من .env.sync إذا وُجد ──
-ENV_SYNC="$REPO_DIR/backend/.env.sync"
+# ── تحديث .env من .env.sync.b64 (مشفّر base64) ──
+ENV_SYNC_B64="$REPO_DIR/backend/.env.sync.b64"
 ENV_FILE="$REPO_DIR/backend/.env"
-if [ -f "$ENV_SYNC" ]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔄 تحديث .env من .env.sync..." >> "$LOG_FILE"
+if [ -f "$ENV_SYNC_B64" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔄 تحديث .env من .env.sync.b64..." >> "$LOG_FILE"
+    DECODED=$(base64 -d "$ENV_SYNC_B64" 2>/dev/null)
     while IFS= read -r line; do
-        # تجاهل التعليقات والأسطر الفارغة
         [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
         KEY="${line%%=*}"
-        # استبدل أو أضف المتغير في .env
         if grep -q "^${KEY}=" "$ENV_FILE" 2>/dev/null; then
             sed -i "s|^${KEY}=.*|${line}|" "$ENV_FILE"
         else
             echo "$line" >> "$ENV_FILE"
         fi
-    done < "$ENV_SYNC"
+    done <<< "$DECODED"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ .env محدَّث بنجاح" >> "$LOG_FILE"
 fi
 
@@ -57,8 +56,9 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔄 تحديث جديد: $LOCAL → $REMOT
 
 git pull origin main --quiet >> "$LOG_FILE" 2>&1
 
-# تحديث .env مرة أخرى بعد pull (حتى لو تغيّر .env.sync)
-if [ -f "$ENV_SYNC" ]; then
+# تحديث .env مرة أخرى بعد pull (حتى لو تغيّر .env.sync.b64)
+if [ -f "$ENV_SYNC_B64" ]; then
+    DECODED=$(base64 -d "$ENV_SYNC_B64" 2>/dev/null)
     while IFS= read -r line; do
         [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
         KEY="${line%%=*}"
@@ -67,7 +67,7 @@ if [ -f "$ENV_SYNC" ]; then
         else
             echo "$line" >> "$ENV_FILE"
         fi
-    done < "$ENV_SYNC"
+    done <<< "$DECODED"
 fi
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ Pull ناجح — إعادة التشغيل..." >> "$LOG_FILE"
