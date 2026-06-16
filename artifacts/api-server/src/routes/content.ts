@@ -151,7 +151,7 @@ router.get("/content/production-video/:filename", async (req, res) => {
     res.status(400).json({ error: "Invalid filename" });
     return;
   }
-  const url = `${PROD_BASE}/videos/${filename}`;
+  const url = `${PROD_BASE}/video_gallery/${filename}`;
   try {
     const upstream = await fetch(url, { signal: AbortSignal.timeout(60000) });
     if (!upstream.ok) { res.status(404).json({ error: "Not found on production server" }); return; }
