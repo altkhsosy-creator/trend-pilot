@@ -14,6 +14,25 @@ trap "rm -f $LOCK_FILE" EXIT
 
 cd "$REPO_DIR" || exit 1
 
+# ── تحديث .env من .env.sync إذا وُجد ──
+ENV_SYNC="$REPO_DIR/backend/.env.sync"
+ENV_FILE="$REPO_DIR/backend/.env"
+if [ -f "$ENV_SYNC" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔄 تحديث .env من .env.sync..." >> "$LOG_FILE"
+    while IFS= read -r line; do
+        # تجاهل التعليقات والأسطر الفارغة
+        [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+        KEY="${line%%=*}"
+        # استبدل أو أضف المتغير في .env
+        if grep -q "^${KEY}=" "$ENV_FILE" 2>/dev/null; then
+            sed -i "s|^${KEY}=.*|${line}|" "$ENV_FILE"
+        else
+            echo "$line" >> "$ENV_FILE"
+        fi
+    done < "$ENV_SYNC"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ .env محدَّث بنجاح" >> "$LOG_FILE"
+fi
+
 # ── فحص TRIGGER_NOW أولاً (بغض النظر عن حالة الكود) ──
 TRIGGER_FILE="$REPO_DIR/TRIGGER_NOW"
 if [ -f "$TRIGGER_FILE" ]; then
@@ -38,6 +57,19 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🔄 تحديث جديد: $LOCAL → $REMOT
 
 git pull origin main --quiet >> "$LOG_FILE" 2>&1
 
+# تحديث .env مرة أخرى بعد pull (حتى لو تغيّر .env.sync)
+if [ -f "$ENV_SYNC" ]; then
+    while IFS= read -r line; do
+        [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+        KEY="${line%%=*}"
+        if grep -q "^${KEY}=" "$ENV_FILE" 2>/dev/null; then
+            sed -i "s|^${KEY}=.*|${line}|" "$ENV_FILE"
+        else
+            echo "$line" >> "$ENV_FILE"
+        fi
+    done < "$ENV_SYNC"
+fi
+
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ Pull ناجح — إعادة التشغيل..." >> "$LOG_FILE"
 
 tmux kill-session -t trendpilot 2>/dev/null
@@ -46,8 +78,7 @@ bash /root/start_trendpilot.sh >> "$LOG_FILE" 2>&1
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🚀 السيرفر أُعيد تشغيله بنجاح" >> "$LOG_FILE"
 
-# إذا وُجد ملف TRIGGER_NOW — شغّل الـ job فوراً
-TRIGGER_FILE="$REPO_DIR/TRIGGER_NOW"
+# إذا وُجد ملف TRIGGER_NOW بعد الـ pull — شغّل الـ job
 if [ -f "$TRIGGER_FILE" ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] 🎬 TRIGGER_NOW مكتشف — انتظار بدء السيرفر (25 ثانية)..." >> "$LOG_FILE"
     sleep 25
