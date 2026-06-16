@@ -63,6 +63,10 @@ function fetchVideoLibrary(): Promise<VideoLibrary> {
   });
 }
 
+function fetchProductionVideos(): Promise<VideoLibrary> {
+  return fetch(`${BASE}/api/content/production-videos`).then((r) => r.json()).catch(() => ({ videos: [], total: 0 }));
+}
+
 function triggerRun(): Promise<{ status: string }> {
   return fetch(`${BASE}/api/content/run`, { method: "POST" }).then((r) => r.json());
 }
@@ -95,6 +99,13 @@ export function Studio() {
     queryFn: fetchVideoLibrary,
     retry: false,
     refetchInterval: false,
+  });
+
+  const { data: prodLibrary } = useQuery<VideoLibrary>({
+    queryKey: ["production-videos"],
+    queryFn: fetchProductionVideos,
+    retry: false,
+    refetchInterval: 60000,
   });
 
   const mutation = useMutation({
@@ -151,7 +162,17 @@ export function Studio() {
         <ContentView data={data} videoRef={videoRef} />
       ) : null}
 
-      {/* Video Library */}
+      {/* Production Server Videos */}
+      {prodLibrary && prodLibrary.total > 0 && (
+        <ProductionVideosSection
+          library={prodLibrary}
+          selectedVideo={selectedVideo}
+          onSelect={setSelectedVideo}
+          onClose={() => setSelectedVideo(null)}
+        />
+      )}
+
+      {/* Local Video Library */}
       <VideoLibrarySection
         library={library}
         selectedVideo={selectedVideo}
@@ -264,6 +285,79 @@ function ContentView({
             </Card>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------
+// Production Server Videos Section
+// -------------------------------------------------------
+function ProductionVideosSection({
+  library,
+  selectedVideo,
+  onSelect,
+  onClose,
+}: {
+  library: VideoLibrary;
+  selectedVideo: ArchivedVideo | null;
+  onSelect: (v: ArchivedVideo) => void;
+  onClose: () => void;
+}) {
+  const prodVideos = library.videos.map(v => ({
+    ...v,
+    url: `${BASE}/api/content/production-video/${v.filename}`,
+  }));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+        <h2 className="text-xl font-semibold">Production Server</h2>
+        <Badge variant="destructive" className="text-xs">{library.total} videos · DigitalOcean Live</Badge>
+      </div>
+
+      {selectedVideo && prodVideos.some(v => v.filename === selectedVideo.filename) && (
+        <Card className="border-red-500/40 bg-card/60 backdrop-blur overflow-hidden">
+          <CardHeader className="border-b border-border/50 bg-muted/20 flex flex-row items-center justify-between gap-2 flex-wrap py-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <Play className="h-4 w-4 text-red-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-medium text-sm truncate">{selectedVideo.title || selectedVideo.filename}</p>
+                <p className="text-xs text-muted-foreground">{formatDate(selectedVideo.generated_at)}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
+                <a href={`${BASE}/api/content/production-video/${selectedVideo.filename}`} download={selectedVideo.filename}>
+                  <Download className="h-3.5 w-3.5" />Download
+                </a>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onClose}><X className="h-4 w-4" /></Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0 bg-black">
+            <video
+              key={selectedVideo.filename}
+              src={`${BASE}/api/content/production-video/${selectedVideo.filename}`}
+              controls
+              autoPlay
+              className="w-full max-h-[480px] object-contain"
+              preload="auto"
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {prodVideos.map((video) => (
+          <VideoCard
+            key={video.filename}
+            video={video}
+            isSelected={selectedVideo?.filename === video.filename}
+            onSelect={onSelect}
+          />
+        ))}
       </div>
     </div>
   );
