@@ -1,0 +1,37 @@
+[viral_engine] NewsAPI returned 0 True Crime stories
+[viral_engine] NewsAPI returned empty — falling back
+[viral_engine] Trying Reddit browser UA...
+[viral_engine] fetch failed for r/UnresolvedMysteries: 403 Client Error: Blocked for url: https://www.reddit.com/r/UnresolvedMysteries/top.json?limit=10&t=week
+[viral_engine] fetch failed for r/TrueCrime: 403 Client Error: Blocked for url: https://www.reddit.com/r/TrueCrime/top.json?limit=10&t=week
+[viral_engine] fetch failed for r/ColdCases: 403 Client Error: Blocked for url: https://www.reddit.com/r/ColdCases/top.json?limit=10&t=week
+[viral_engine] fetch failed for r/TrueCrimeDiscussion: 403 Client Error: Blocked for url: https://www.reddit.com/r/TrueCrimeDiscussion/top.json?limit=10&t=week
+[viral_engine] All sources failed — using rotating fallback library
+[viral_engine] Top story (TrueCrime): A man was executed for his wife's murder. 12 years later, she walked into a poli
+[scheduler] Selected story: A man was executed for his wife's murder. 12 years later, she walked into a poli...
+[scheduler] Story type: true_crime
+Traceback (most recent call last):
+  File "/root/trend-pilot/backend/scheduler.py", line 175, in <module>
+    result = job()
+             ^^^^^
+  File "/root/trend-pilot/backend/scheduler.py", line 41, in job
+    content = generate_full_content(topic)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/trend-pilot/backend/script.py", line 216, in generate_full_content
+    return _real_content(topic)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/root/trend-pilot/backend/script.py", line 195, in _real_content
+    response = _client.chat.completions.create(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/openai/_utils/_utils.py", line 298, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/openai/resources/chat/completions/completions.py", line 1251, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/openai/_base_client.py", line 1332, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/openai/_base_client.py", line 1105, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.AuthenticationError: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************nVAA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+root@ubuntu-s-1vcpu-1gb-fra1:~/trend-pilot/backend#
