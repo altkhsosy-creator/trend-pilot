@@ -118,6 +118,14 @@ _TC_BANNED = [
     "season 2", "renewed", "canceled", "trailer", "review:", "stream it",
     "beach read", "best shows", "editors share", "prestige period",
     "successor with upcoming", "hotel del luna",
+    # شخصيات سياسية بارزة ومحتوى رأي سياسي — القناة عن جرائم جنائية موثقة
+    # فقط، مش تحليل أو رأي سياسي حتى لو احتوى كلمة "crime"
+    "trump", "biden", "harris", "obama", "putin", "netanyahu", "zelensky",
+    "president", "senator", "congress", "election", "war crimes",
+    "collusion", "cruelties", "corruptions", "political party",
+    "editorial", "op-ed", "opinion:",
+    # أي قضية متعلقة بفلسطين — استثناء كامل بقرار صريح
+    "palestin", "gaza", "west bank", "israeli settler", "settler attack",
 ]
 
 
@@ -160,6 +168,8 @@ def _fetch_from_newsapi() -> list[dict]:
                 seen_titles.add(title)
                 stories.append({
                     "title": title,
+                    "description": (article.get("description") or "").strip(),
+                    "content": (article.get("content") or "").strip(),
                     "score": 50000 + random.randint(0, 50000),
                     "comments": 5000 + random.randint(0, 10000),
                     "subreddit": "NewsAPI",

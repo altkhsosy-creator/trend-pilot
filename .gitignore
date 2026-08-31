@@ -53,3 +53,29 @@ backend/env_ready.txt
 backend/.env
 .env
 
+
+# ===== TrendPilot rebuild additions (Aug 31 2026) =====
+# Secrets — never commit any .env variant
+backend/.env.backup_*
+*.env.backup_*
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Manual code backups (cp file file.backup_TIMESTAMP convention)
+*.backup_*
+
+# Generated content — audio, video, subtitles, weekly output
+backend/weekly_content/
+backend/data/
+backend/*.mp3
+backend/*.mp4
+backend/*.srt
+test_*.py
+
+# Local virtual environment
+venv/
+
+# Local tar.gz archive backups
+*.tar.gz

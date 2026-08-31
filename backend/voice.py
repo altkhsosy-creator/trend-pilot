@@ -98,7 +98,7 @@ def text_to_speech_elevenlabs(text: str) -> str:
     }
     payload = {
         "text": text,
-        "model_id": "eleven_monolingual_v1",
+        "model_id": "eleven_multilingual_v2",
         "voice_settings": {
             "stability": 0.50,
             "similarity_boost": 0.75,

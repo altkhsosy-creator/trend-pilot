@@ -310,11 +310,12 @@ def extract_segments_with_hooks(script):
             # تنظيف الـ hook من الرموز الإضافية
             part = part.replace("*", "").strip()
         segments.append((part, is_hook))
-
-    # إذا لم يتم العثور على hooks، استخدم الطريقة القديمة
+    # إذا لم يتم العثور على hooks، استخدم الطريقة القديمة — بدون تحديد عدد ثابت،
+    # نأخذ كل جمل السكربت (مقسّمة على . ! ؟ ...) حتى لا يُقتطع أي جزء من المحتوى
     if len(segments) <= 1:
-        sentences = [s.strip() for s in script.replace("\n", " ").split(".") if len(s.strip()) > 10]
-        return [(s, False) for s in sentences[:8]]
+        raw = re.split(r'[.!؟\n]+', script)
+        sentences = [s.strip() for s in raw if len(s.strip()) > 10]
+        return [(s, False) for s in sentences]
 
     return segments
 
@@ -349,7 +350,7 @@ def _get_audio_duration(path):
         return 0.0
 
 
-def _ffmpeg_trim_clip(src, dst, duration, w=W, h=H, fade_in=0.3, fade_out=0.3):
+def _ffmpeg_trim_clip(src, dst, duration, w=W, h=H, fade_in=0.3, fade_out=0.3, start_offset=0.0):
     """
     يقص مقطع فيديو مع:
     - تدرج لوني سينمائي (cinematic grade)
@@ -370,7 +371,7 @@ def _ffmpeg_trim_clip(src, dst, duration, w=W, h=H, fade_in=0.3, fade_out=0.3):
         f"fade=t=out:st={round(fade_out_start, 3)}:d={fade_out}"
     )
     subprocess.run(
-        ["ffmpeg", "-y", "-i", src,
+        ["ffmpeg", "-y", "-ss", str(round(max(start_offset, 0.0), 3)), "-i", src,
          "-t", str(duration),
          "-vf", vf,
          "-r", "24",
@@ -543,7 +544,7 @@ def _segment_pexels_query(text, story_type="default"):
     return "dark mystery investigation crime"
 
 
-def create_video(audio_path, script, output="video.mp4", story_type="default", title=""):
+def create_video(audio_path, script, output="video.mp4", story_type="default", title="", footage_dir=None):
     """
     إنتاج الفيديو باستخدام ffmpeg streaming مع:
     - Title Card دراماتيكي في البداية
@@ -565,6 +566,18 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
     segment_music_info = []  # list of (duration, music_type)
     elapsed_time = 0.0
 
+    footage_clips = []
+    if footage_dir and os.path.isdir(footage_dir):
+        footage_clips = sorted(
+            os.path.join(footage_dir, f)
+            for f in os.listdir(footage_dir)
+            if f.lower().endswith(".mp4")
+        )
+        if footage_clips:
+            print(f"[video] استخدام {len(footage_clips)} كليب مُحمّل مسبقاً من {footage_dir}")
+        clip_durations = {c: _get_audio_duration(c) for c in footage_clips}
+        clip_usage_count = {c: 0 for c in footage_clips}
+
     with tempfile.TemporaryDirectory() as tmp:
         segment_files = []
 
@@ -579,16 +592,34 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
 
         duration_per_segment = total / max(len(segments), 1)
 
-        for idx, (text, is_hook) in enumerate(segments):
-            # تحديد نوع المشهد أولاً لحساب المدة المناسبة
-            music_type = detect_music_type(
-                text, idx, len(segments), is_hook,
-                hook_indices, elapsed_time, total
+        # ── تمريرة أولى: نحسب مدة كل مقطع حسب نوعه (بدون قص فعلي)،
+        # ثم نطبّع (scale) كل المدد بنسبة موحدة بحيث يساوي مجموعها
+        # مدة الصوت الفعلية بالضبط — هذا يمنع فقدان أي جزء من الصوت/الفيديو
+        title_dur = 5.0 if title else 0.0
+        available_duration = max(total - title_dur, 1.0)
+
+        raw_durations = []
+        music_types = []
+        _probe_elapsed = 0.0
+        for _idx, (_text, _is_hook) in enumerate(segments):
+            _mt = detect_music_type(
+                _text, _idx, len(segments), _is_hook,
+                hook_indices, _probe_elapsed, total
             )
+            _d = get_segment_duration(_mt, duration_per_segment)
+            music_types.append(_mt)
+            raw_durations.append(_d)
+            _probe_elapsed += _d
 
-            # مدة ديناميكية حسب نوع المشهد — وثائقي حقيقي
-            seg_dur = get_segment_duration(music_type, duration_per_segment)
+        raw_total = sum(raw_durations) or 1.0
+        scale = available_duration / raw_total
+        seg_durations = [max(1.5, round(d * scale, 3)) for d in raw_durations]
 
+        for idx, (text, is_hook) in enumerate(segments):
+            music_type = music_types[idx]
+            seg_dur = seg_durations[idx]
+
+            seg_start_time = elapsed_time
             segment_music_info.append((seg_dur, music_type))
             elapsed_time += seg_dur
 
@@ -596,21 +627,45 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
             is_intense = music_type in ("hook_start", "hook_end", "story_climax")
             fade_dur = 0.2 if is_intense else 0.4
 
-            # جلب فيديو Pexels مخصص لمحتوى المقطع
-            query = _segment_pexels_query(text, story_type)
-            urls = get_stock_video_urls(query, n=2)
-
             raw_path = os.path.join(tmp, f"raw_{idx:03d}.mp4")
             used_video = False
 
-            for url in urls:
-                clip = download_clip(url, tmp)
-                if clip:
-                    _ffmpeg_trim_clip(clip, raw_path, seg_dur,
-                                      fade_in=fade_dur, fade_out=fade_dur)
-                    if os.path.exists(raw_path) and os.path.getsize(raw_path) > 1000:
-                        used_video = True
-                        break
+            if footage_clips:
+                # اختيار الكليب المناسب بناءً على موقع المقطع الزمني ضمن مدة السكربت الكلية
+                clip_slot_dur = total / len(footage_clips)
+                clip_idx = min(len(footage_clips) - 1, int(seg_start_time / clip_slot_dur))
+                local_clip = footage_clips[clip_idx]
+
+                # لو أعيد استخدام نفس الكليب (لأن المقاطع أكثر من الكليبات المتاحة)،
+                # نقص من نقطة مختلفة داخل الكليب نفسه بدل الإعادة من الصفر دائماً —
+                # يحافظ على توافق الكليب مع لحظة القصة، ويمنع تكرار نفس الفريمات بالضبط
+                usage = clip_usage_count.get(local_clip, 0)
+                clip_own_dur = clip_durations.get(local_clip, 0) or 0
+                if usage > 0 and clip_own_dur > seg_dur:
+                    start_offset = (usage * seg_dur) % max(clip_own_dur - seg_dur, 0.1)
+                else:
+                    start_offset = 0.0
+                clip_usage_count[local_clip] = usage + 1
+
+                _ffmpeg_trim_clip(local_clip, raw_path, seg_dur,
+                                  fade_in=fade_dur, fade_out=fade_dur,
+                                  start_offset=start_offset)
+                if os.path.exists(raw_path) and os.path.getsize(raw_path) > 1000:
+                    used_video = True
+
+            if not used_video:
+                # fallback: جلب حي من Pexels (فقط لو ما فيه footage مسبق أو فشل القص المحلي)
+                query = _segment_pexels_query(text, story_type)
+                urls = get_stock_video_urls(query, n=2)
+
+                for url in urls:
+                    clip = download_clip(url, tmp)
+                    if clip:
+                        _ffmpeg_trim_clip(clip, raw_path, seg_dur,
+                                          fade_in=fade_dur, fade_out=fade_dur)
+                        if os.path.exists(raw_path) and os.path.getsize(raw_path) > 1000:
+                            used_video = True
+                            break
 
             if not used_video:
                 color = "0x640A0A" if is_hook else "0x0A0A1E"
@@ -654,7 +709,7 @@ def create_video(audio_path, script, output="video.mp4", story_type="default", t
         else:
             use_stream_loop = False
 
-        has_music = music_track and os.path.exists(music_track)
+        has_music = False  # الموسيقى الخلفية معطّلة بقرار — كانت تؤثر سلباً على صوت الراوي
 
         if has_music:
             if use_stream_loop:

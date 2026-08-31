@@ -1,234 +1,223 @@
-import os
-import shutil
-import threading
-from datetime import datetime, date
+"""
+scheduler.py — الجدولة اليومية: تركيب الفيديو من المحتوى الجاهز (weekly_planner)
+ونشره على يوتيوب، مع توزيع الشورتات على أيام منفصلة.
 
-from apscheduler.schedulers.background import BackgroundScheduler
-from viral_engine import get_viral_story
-from hook_ai import detect_story_type
-from script import generate_script, generate_full_content
+الجدولة الفعلية (cron) تُضبط خارج هذا الملف عبر systemd/apscheduler.
+هذا الملف يوفّر job() تُستدعى مرة يومياً.
+"""
+
+import os
+import json
+from datetime import datetime
+
+from apscheduler.schedulers.blocking import BlockingScheduler
+
 from voice import text_to_speech
 from video import create_video
-from package_builder import build_content_package
-from notify import send_notification
-from short_generator import generate_independent_shorts
-from youtube_upload import upload_video, upload_short, generate_description, set_thumbnail
 from thumbnail import create_thumbnail
+from short_generator import generate_independent_shorts
+from youtube_upload import upload_video, upload_short, set_thumbnail
 
-VIDEOS_DIR    = os.path.join(os.path.dirname(__file__), "output", "videos")
-_LAST_RUN_FILE = os.path.join(os.path.dirname(__file__), "output", ".last_run_date")
+BASE = os.path.dirname(os.path.abspath(__file__))
+WEEKLY_DIR = os.path.join(BASE, "weekly_content")
 
-_latest_package: dict = {}
+PUBLISH_DAYS = [d.strip().lower() for d in os.getenv("PUBLISH_DAYS", "monday,thursday,saturday").split(",")]
 
+# الأيام اللي فيها نشر شورت "متأخر" فقط (بدون فيديو طويل جديد)، وأي يوم/index مصدره
+# index: 0=Hook, 1=Plot Twist, 2=Climax
+SHORT_ONLY_DAYS = {
+    "tuesday":  ("monday", 1),
+    "friday":   ("thursday", 2),
+    "sunday":   ("saturday", 1),
+}
 
-def _record_job_run():
-    """يسجّل تاريخ آخر تشغيل ناجح للـ job"""
-    os.makedirs(os.path.dirname(_LAST_RUN_FILE), exist_ok=True)
-    with open(_LAST_RUN_FILE, "w") as f:
-        f.write(date.today().isoformat())
-
-
-def _has_run_today() -> bool:
-    """يفحص إذا كان الـ job شُغِّل اليوم بالفعل"""
-    if not os.path.exists(_LAST_RUN_FILE):
-        return False
-    try:
-        with open(_LAST_RUN_FILE) as f:
-            last = f.read().strip()
-        return last == date.today().isoformat()
-    except Exception:
-        return False
+_WEEKDAY_NAMES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
 
-def job():
-    """
-    الوظيفة الرئيسية التي تعمل كل 24 ساعة
-    تجلب قصة فيروسية وتنتج فيديو كامل
-    """
-    global _latest_package
-
-    print("[scheduler] Starting daily job...")
-
-    # 1. جلب أفضل قصة فيروسية من Reddit
-    story = get_viral_story()
-    topic = story["title"]
-    print(f"[scheduler] Selected story: {topic[:80]}...")
-
-    # 2. تحديد نوع القصة (لتحسين الـ hooks والتصميم)
-    story_type = detect_story_type(topic)
-    print(f"[scheduler] Story type: {story_type}")
-
-    # 3. توليد المحتوى الكامل (عنوان، وصف، تاغات)
-    content = generate_full_content(topic)
-    title = content.get("title", topic)
-    title_variants = content.get("title_variants", [])
-    description = content.get("description", "")
-    tags = content.get("tags", [])
-    print(f"[scheduler] Generated title: {title[:80]}")
-    if title_variants:
-        print(f"[scheduler] 📝 {len(title_variants)} title variants generated for A/B testing")
-
-    # 4. توليد السكريبت
-    script = generate_script()
-    print(f"[scheduler] Script generated: {len(script)} characters")
-
-    # 5. تحويل النص إلى صوت (MP3)
-    audio = text_to_speech(script)
-    print(f"[scheduler] Audio generated: {audio}")
-
-    # 6. إنشاء الفيديو (مع تمرير نوع القصة للـ video.py)
-    video = create_video(audio, script, story_type=story_type)
-    print(f"[scheduler] Video generated: {video}")
-    send_notification(f"🎬 فيديو اليوم جاهز!\n\nالعنوان: {title}\n📹 رابط المعاينة: http://46.101.250.86:5001")
-
-    # إنتاج Shorts مستقلة بمحتوى فريد (لا قص من الفيديو الطويل)
-    print("[scheduler] 📱 Generating 3 independent Shorts...")
-    shorts_paths = generate_independent_shorts(title=title, script=script, num_shorts=3)
-    print(f"[scheduler] 📱 {len(shorts_paths)} independent Shorts ready")
-
-    # 7. تجميع كل شيء في حزمة محتوى واحدة
-    yt_description = generate_description(title, script, tags)
-    package = build_content_package(
-        topic=topic,
-        title=title,
-        script=script,
-        description=yt_description,
-        tags=tags,
-        audio_path=audio,
-        video_path=video,
+def _find_latest_week_dir() -> str | None:
+    if not os.path.isdir(WEEKLY_DIR):
+        return None
+    weeks = sorted(
+        [d for d in os.listdir(WEEKLY_DIR) if d.startswith("week_") and os.path.isdir(os.path.join(WEEKLY_DIR, d))],
+        reverse=True,
     )
-    # حفظ بدائل العناوين للـ A/B testing
-    if title_variants:
-        package["title_variants"] = title_variants
+    return os.path.join(WEEKLY_DIR, weeks[0]) if weeks else None
 
-    # 8. حفظ نسخة أرشيفية من الفيديو بـ timestamp
-    os.makedirs(VIDEOS_DIR, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    archived_video = os.path.join(VIDEOS_DIR, f"video_{timestamp}.mp4")
-    if os.path.exists(video):
-        shutil.copy2(video, archived_video)
-        print(f"[scheduler] Archived video → {archived_video}")
-    package["archived_video"] = f"video_{timestamp}.mp4"
 
-    # 9. توليد Thumbnail احترافي
-    print("[scheduler] Generating thumbnail...")
+def _find_day_dir(week_dir: str, day_name: str) -> str | None:
+    matches = [d for d in os.listdir(week_dir) if day_name in d.lower()]
+    return os.path.join(week_dir, matches[0]) if matches else None
+
+
+def _load_day_content(day_dir: str) -> dict:
+    def _read(name):
+        path = os.path.join(day_dir, name)
+        return open(path, encoding="utf-8").read().strip() if os.path.exists(path) else ""
+
+    script_raw = _read("script.txt")
+    lines = script_raw.split("\n\n", 1)
+    title = lines[0].strip() if lines else ""
+    script = lines[1].strip() if len(lines) > 1 else script_raw
+
+    description = _read("description.txt")
+    keywords_raw = _read("keywords.txt")
+    tags = [k.strip() for k in keywords_raw.split("\n") if k.strip()]
+
+    outline_path = os.path.join(day_dir, "outline.json")
+    outline = {}
+    if os.path.exists(outline_path):
+        try:
+            outline = json.load(open(outline_path, encoding="utf-8"))
+        except Exception:
+            outline = {}
+    return {"title": title, "script": script, "description": description, "tags": tags, "outline": outline}
+
+
+def _load_published(day_dir: str) -> dict:
+    path = os.path.join(day_dir, "published.json")
+    if os.path.exists(path):
+        try:
+            return json.load(open(path, encoding="utf-8"))
+        except Exception:
+            pass
+    return {"long": False, "short_0": False, "short_1": False, "short_2": False}
+
+
+def _save_published(day_dir: str, status: dict):
+    with open(os.path.join(day_dir, "published.json"), "w", encoding="utf-8") as f:
+        json.dump(status, f, ensure_ascii=False, indent=2)
+
+
+def _produce_long_video_and_shorts(day_dir: str, content: dict, status: dict):
+    """ينتج الفيديو الطويل + الثلاث شورتات، يرفع الطويل + شورت الـHook فقط، ويحفظ الباقي لأيام لاحقة."""
+    title = content["title"]
+    script = content["script"]
+    description = content["description"]
+    tags = content["tags"]
+    outline = content.get("outline", {})
+
+    print(f"[scheduler] Title: {title}")
+    print(f"[scheduler] Script: {len(script.split())} words")
+
+    audio = text_to_speech(script)
+    print(f"[scheduler] Audio: {audio}")
+
+    video_path = create_video(audio, script, output=os.path.join(day_dir, "video.mp4"), title=title, footage_dir=os.path.join(day_dir, "footage"))
+    print(f"[scheduler] Video: {video_path}")
+
     thumbnail_path = None
     try:
         hook_line = script.split("\n")[0][:80].strip()
         thumbnail_path = create_thumbnail(title, subtitle=hook_line)
-        package["thumbnail_path"] = thumbnail_path
-        print(f"[scheduler] ✅ Thumbnail: {thumbnail_path}")
+        print(f"[scheduler] Thumbnail: {thumbnail_path}")
     except Exception as e:
         print(f"[scheduler] ⚠️ Thumbnail failed: {e}")
 
-    # 10. رفع على YouTube (إذا كانت credentials موجودة)
-    yt_video_id = None
-    yt_short_ids = []
-    try:
-        print("[scheduler] Uploading main video to YouTube...")
-        yt_video_id = upload_video(
-            video_path=video,
-            title=title,
-            description=yt_description,
-            tags=tags,
-            privacy="public",
-        )
-        package["youtube_url"] = f"https://www.youtube.com/watch?v={yt_video_id}"
-        print(f"[scheduler] ✅ Main video uploaded: {package['youtube_url']}")
-
-        # رفع الـ Thumbnail
-        if thumbnail_path and yt_video_id:
-            set_thumbnail(yt_video_id, thumbnail_path)
-
-        # رفع الـ Shorts — عناوين مستقلة لكل زاوية
-        short_angle_titles = [
-            f"The One Detail Nobody Noticed… {title[:55]}",
-            f"The Moment Everything Changed — {title[:55]}",
-            f"The Question Nobody Can Answer — {title[:55]}",
-        ]
-        for i, short_path in enumerate(shorts_paths):
-            if os.path.exists(short_path):
-                short_title = short_angle_titles[i] if i < len(short_angle_titles) else f"{title[:70]} — Part {i+1}"
-                sid = upload_short(
-                    video_path=short_path,
-                    title=short_title,
-                    description=yt_description,
-                    tags=tags,
-                )
-                yt_short_ids.append(sid)
-                print(f"[scheduler] ✅ Short {i+1} uploaded: https://youtube.com/shorts/{sid}")
-
-    except ValueError as e:
-        print(f"[scheduler] ⚠️ YouTube upload skipped: {e}")
-    except Exception as e:
-        print(f"[scheduler] ❌ YouTube upload failed: {e}")
-
-    # 10. إشعار Telegram
-    yt_link = package.get("youtube_url", "لم يُرفع بعد")
-    shorts_count = len(yt_short_ids)
-    variants_text = ""
-    if title_variants:
-        variants_lines = "\n".join(f"  {i+2}. {v[:90]}" for i, v in enumerate(title_variants[:4]))
-        variants_text = f"\n\n📝 بدائل A/B للعنوان:\n{variants_lines}"
-    send_notification(
-        f"✅ فيديو اليوم جاهز!\n\n"
-        f"📹 العنوان المختار:\n{title[:100]}"
-        f"{variants_text}\n\n"
-        f"🔗 YouTube: {yt_link}\n"
-        f"✂️ Shorts: {shorts_count} مقاطع"
+    shorts_dir = os.path.join(day_dir, "shorts")
+    os.makedirs(shorts_dir, exist_ok=True)
+    shorts_paths = generate_independent_shorts(
+        title=title, outline=outline,
+        footage_dir=os.path.join(day_dir, "footage"),
+        shorts_dir=shorts_dir, num_shorts=3,
     )
+    print(f"[scheduler] {len(shorts_paths)} shorts generated and saved to {shorts_dir}")
 
-    _latest_package = package
-    _record_job_run()
-    print("[scheduler] ✅ Daily job completed!")
-    return package
+    if not status["long"]:
+        try:
+            yt_id = upload_video(video_path=video_path, title=title, description=description,
+                                  tags=tags, privacy="private")
+            print(f"[scheduler] ✅ Long video: https://www.youtube.com/watch?v={yt_id}")
+            if thumbnail_path:
+                set_thumbnail(yt_id, thumbnail_path)
+            status["long"] = True
+        except Exception as e:
+            print(f"[scheduler] ❌ Long video upload failed: {e}")
+
+    _publish_short(day_dir, shorts_dir, 0, title, description, tags, status)
+
+    _save_published(day_dir, status)
 
 
-def get_latest_package() -> dict:
-    """
-    يعيد آخر حزمة محتوى تم إنتاجها
-    يمكن استخدامها بواسطة الـ API لعرضها في الـ frontend
-    """
-    return _latest_package
+def _publish_short(source_day_dir: str, shorts_dir: str, index: int, title: str,
+                    description: str, tags: list, status: dict):
+    key = f"short_{index}"
+    if status.get(key):
+        print(f"[scheduler] Short {index} already published — skipping")
+        return
+
+    short_path = os.path.join(shorts_dir, f"short_{index}.mp4")
+    if not os.path.exists(short_path):
+        print(f"[scheduler] ❌ Short {index} file not found at {short_path}")
+        return
+
+    angle_labels = ["Hook", "Plot Twist", "Climax"]
+    label = angle_labels[index] if index < len(angle_labels) else f"Part {index+1}"
+    short_title = f"{title[:80]} — {label}"
+
+    try:
+        sid = upload_short(video_path=short_path, title=short_title, description=description, tags=tags)
+        print(f"[scheduler] ✅ Short {index} ({label}): https://youtube.com/shorts/{sid}")
+        status[key] = True
+        _save_published(source_day_dir, status)
+    except Exception as e:
+        print(f"[scheduler] ❌ Short {index} upload failed: {e}")
 
 
-def start_scheduler():
-    """
-    يبدأ جدولة المهام — تعمل يومياً الساعة 03:00 صباحاً.
-    إذا لم يُشغَّل الـ job اليوم بعد (restart في منتصف اليوم مثلاً)
-    يُشغَّل تلقائياً في الخلفية بعد 10 ثوانٍ من الـ startup.
-    """
-    from apscheduler.triggers.cron import CronTrigger
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(job, CronTrigger(hour=3, minute=0))
-    scheduler.start()
+def job():
+    today = datetime.utcnow()
+    day_name = _WEEKDAY_NAMES[today.weekday()]
+    print(f"[scheduler] ===== Daily job started: {today.strftime('%Y-%m-%d %H:%M')} ({day_name}) =====")
 
-    today = date.today().isoformat()
-    ran_today = _has_run_today()
+    week_dir = _find_latest_week_dir()
+    if not week_dir:
+        print("[scheduler] ❌ No weekly content found — run weekly_planner.py first")
+        return
 
-    print("[scheduler] ========================================")
-    print("[scheduler] 🚀 Scheduler started successfully!")
-    print(f"[scheduler] 📅 Daily job: 03:00 AM (server UTC)")
-    print(f"[scheduler] 📆 Today: {today} | Already ran: {ran_today}")
-    print("[scheduler] ========================================")
+    if day_name in PUBLISH_DAYS:
+        day_dir = _find_day_dir(week_dir, day_name)
+        if not day_dir:
+            print(f"[scheduler] ❌ No content for {day_name}")
+            return
+        content = _load_day_content(day_dir)
+        status = _load_published(day_dir)
+        _produce_long_video_and_shorts(day_dir, content, status)
 
-    if not ran_today:
-        print("[scheduler] ⚡ Job لم يُشغَّل اليوم — سيبدأ تلقائياً بعد 10 ثوانٍ...")
-        def _delayed_run():
-            import time
-            time.sleep(10)
-            print(f"[scheduler] 🎬 تشغيل فوري ({today}) ...")
-            try:
-                job()
-            except Exception as e:
-                print(f"[scheduler] ❌ فشل التشغيل الفوري: {e}")
-        threading.Thread(target=_delayed_run, daemon=True).start()
+    elif day_name in SHORT_ONLY_DAYS:
+        source_day_name, short_index = SHORT_ONLY_DAYS[day_name]
+        source_day_dir = _find_day_dir(week_dir, source_day_name)
+        if not source_day_dir:
+            print(f"[scheduler] ❌ No source content for {source_day_name} (needed for {day_name}'s short)")
+            return
+        content = _load_day_content(source_day_dir)
+        status = _load_published(source_day_dir)
+        shorts_dir = os.path.join(source_day_dir, "shorts")
+        _publish_short(source_day_dir, shorts_dir, short_index, content["title"],
+                        content["description"], content["tags"], status)
+
     else:
-        print(f"[scheduler] ✅ Job شُغِّل اليوم بالفعل — لا إعادة تشغيل")
+        print(f"[scheduler] {day_name}: no publishing action scheduled")
+
+    print(f"[scheduler] ===== Daily job completed: {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} =====")
 
 
-# للاختبار اليدوي - شغل الملف مباشرة
+def run_weekly_planner():
+    from weekly_planner import plan_week
+    plan_week()
+
+
 if __name__ == "__main__":
-    print("[scheduler] Running manual test...")
-    result = job()
-    print(f"\n✅ Test completed! Package ready with video: {result.get('video_path', 'N/A')}")
+    import sys
+    if "--plan-week" in sys.argv:
+        run_weekly_planner()
+    elif "--run-job" in sys.argv:
+        job()
+    else:
+        scheduler = BlockingScheduler(timezone="UTC")
+        publish_days_str = ",".join(PUBLISH_DAYS)
+        short_only_days_str = ",".join(SHORT_ONLY_DAYS.keys())
+        all_days = f"{publish_days_str},{short_only_days_str}"
+        scheduler.add_job(job, "cron", day_of_week=all_days, hour=18, minute=0)
+        scheduler.add_job(run_weekly_planner, "cron", day_of_week="sun", hour=6, minute=0)
+        print(f"[scheduler] Started — publish days: {publish_days_str} | short-only days: {short_only_days_str} | all at 18:00 UTC")
+        print("[scheduler] Weekly planner: Sunday 06:00 UTC")
+        scheduler.start()
